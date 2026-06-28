@@ -1,0 +1,24 @@
+{
+  "id": "miso_soup",
+  "title": "Miso Soup",
+  "servings": 2,
+  "image": "images/miso_soup.svg",
+  "description": "A light, savoury broth with silken tofu, wakame, and scallion. Ready in ten minutes.",
+  "cuisine": "Japanese",
+  "tags": ["soup", "vegetarian", "quick"],
+  "prep_time": 5,
+  "cook_time": 5,
+  "ingredients": [
+    { "ingredient": "vegetable_broth", "amount": 600 },
+    { "ingredient": "miso_paste", "amount": 40 },
+    { "ingredient": "tofu", "amount": 150 },
+    { "ingredient": "wakame", "amount": 5 },
+    { "ingredient": "scallion", "amount": 20 }
+  ],
+  "steps": [
+    "Warm the broth (do not boil).",
+    "Whisk in the miso paste until dissolved.",
+    "Add the cubed tofu and wakame and heat through for a minute.",
+    "Serve topped with sliced scallion."
+  ]
+}

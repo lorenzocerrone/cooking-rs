@@ -1,0 +1,25 @@
+{
+  "id": "margherita_pizza",
+  "title": "Margherita Pizza",
+  "servings": 2,
+  "image": "images/margherita_pizza.svg",
+  "description": "Blistered crust, crushed tomato, milky mozzarella, and fresh basil — the original pizza.",
+  "cuisine": "Italian",
+  "tags": ["dinner", "vegetarian", "classic"],
+  "prep_time": 20,
+  "cook_time": 12,
+  "ingredients": [
+    { "ingredient": "pizza_dough", "amount": 400 },
+    { "ingredient": "tomato", "amount": 200 },
+    { "ingredient": "mozzarella", "amount": 150 },
+    { "ingredient": "basil", "amount": 10 },
+    { "ingredient": "olive_oil", "amount": 15 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Stretch the dough onto a floured tray.",
+    "Spread with crushed tomato, season with salt, and scatter torn mozzarella.",
+    "Bake hot (250°C) for about 12 minutes until the crust is blistered.",
+    "Finish with fresh basil and a drizzle of olive oil."
+  ]
+}

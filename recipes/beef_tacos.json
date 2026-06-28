@@ -1,0 +1,25 @@
+{
+  "id": "beef_tacos",
+  "title": "Beef Tacos",
+  "servings": 4,
+  "image": "images/beef_tacos.svg",
+  "description": "Spiced ground beef in warm tortillas with tomato, onion, and melty cheddar.",
+  "cuisine": "Mexican",
+  "tags": ["dinner", "quick"],
+  "prep_time": 15,
+  "cook_time": 15,
+  "ingredients": [
+    { "ingredient": "ground_beef", "amount": 500 },
+    { "ingredient": "tortilla", "amount": 8 },
+    { "ingredient": "onion", "amount": 100 },
+    { "ingredient": "tomato", "amount": 150 },
+    { "ingredient": "cheddar", "amount": 120 },
+    { "ingredient": "lettuce", "amount": 100 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Brown the ground beef with the chopped onion and a pinch of salt.",
+    "Warm the tortillas in a dry pan.",
+    "Fill with the beef, then top with diced tomato, shredded lettuce, and cheddar."
+  ]
+}

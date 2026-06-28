@@ -1,0 +1,26 @@
+{
+  "id": "chicken_stir_fry",
+  "title": "Chicken Stir-Fry",
+  "servings": 3,
+  "image": "images/chicken_stir_fry.svg",
+  "description": "Fast wok-fried chicken with crisp broccoli and peppers in a glossy soy-sesame sauce.",
+  "cuisine": "Chinese",
+  "tags": ["dinner", "quick"],
+  "prep_time": 15,
+  "cook_time": 12,
+  "ingredients": [
+    { "ingredient": "chicken_breast", "amount": 400 },
+    { "ingredient": "broccoli", "amount": 250 },
+    { "ingredient": "bell_pepper", "amount": 150 },
+    { "ingredient": "garlic", "amount": 10 },
+    { "ingredient": "soy_sauce", "amount": 45 },
+    { "ingredient": "sesame_oil", "amount": 15 },
+    { "ingredient": "rice", "amount": 240 }
+  ],
+  "steps": [
+    "Cook the rice.",
+    "Sear sliced chicken in sesame oil until golden, then set aside.",
+    "Stir-fry the broccoli, pepper, and garlic until crisp-tender.",
+    "Return the chicken, add soy sauce, toss, and serve over rice."
+  ]
+}

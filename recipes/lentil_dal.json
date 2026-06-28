@@ -1,0 +1,28 @@
+{
+  "id": "lentil_dal",
+  "title": "Lentil Dal",
+  "servings": 4,
+  "image": "images/lentil_dal.svg",
+  "description": "Creamy spiced red lentils simmered with tomato and coconut milk. Cosy and cheap.",
+  "cuisine": "Indian",
+  "tags": ["dinner", "vegetarian", "comfort"],
+  "prep_time": 10,
+  "cook_time": 30,
+  "ingredients": [
+    { "ingredient": "lentils", "amount": 300 },
+    { "ingredient": "onion", "amount": 100 },
+    { "ingredient": "garlic", "amount": 12 },
+    { "ingredient": "tomato", "amount": 200 },
+    { "ingredient": "coconut_milk", "amount": 200 },
+    { "ingredient": "curry_powder", "amount": 10 },
+    { "ingredient": "olive_oil", "amount": 15 },
+    { "ingredient": "rice", "amount": 240 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Soften the onion and garlic in olive oil, then stir in the curry powder.",
+    "Add the lentils, tomato, coconut milk, and enough water to cover.",
+    "Simmer for 25–30 minutes until the lentils are soft, seasoning with salt.",
+    "Serve over rice."
+  ]
+}

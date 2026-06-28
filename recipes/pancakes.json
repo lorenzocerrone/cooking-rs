@@ -1,0 +1,25 @@
+{
+  "id": "pancakes",
+  "title": "Fluffy Pancakes",
+  "servings": 2,
+  "image": "images/pancakes.svg",
+  "description": "Light, fluffy stack of pancakes — weekend breakfast in fifteen minutes.",
+  "cuisine": "American",
+  "tags": ["breakfast", "vegetarian", "quick"],
+  "prep_time": 5,
+  "cook_time": 10,
+  "ingredients": [
+    { "ingredient": "flour", "amount": 200 },
+    { "ingredient": "milk", "amount": 300 },
+    { "ingredient": "egg", "amount": 1 },
+    { "ingredient": "butter", "amount": 20 },
+    { "ingredient": "sugar", "amount": 20 },
+    { "ingredient": "baking_powder", "amount": 10 }
+  ],
+  "steps": [
+    "Whisk the flour, sugar, and baking powder together.",
+    "Beat in the milk, egg, and melted butter to a smooth batter.",
+    "Cook ladlefuls in a hot non-stick pan until bubbles form, then flip.",
+    "Stack and serve."
+  ]
+}

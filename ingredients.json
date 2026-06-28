@@ -1,12 +1,4 @@
 {
-  "spaghetti":        { "name": "Spaghetti",        "unit": "g",    "category": "Pasta & Grains", "macros": { "calories": 371, "protein": 13,   "carbs": 75,   "fat": 1.5 } },
-  "oats":             { "name": "Rolled oats",      "unit": "g",    "category": "Pasta & Grains", "macros": { "calories": 389, "protein": 17,   "carbs": 66,   "fat": 7 } },
-  "guanciale":        { "name": "Guanciale",        "unit": "g",    "category": "Meat",           "macros": { "calories": 600, "protein": 10,   "carbs": 0,    "fat": 60 } },
-  "egg":              { "name": "Egg",              "unit": "unit", "category": "Dairy & Eggs",   "macros": { "calories": 70,  "protein": 6,    "carbs": 0.5,  "fat": 5 } },
-  "pecorino":         { "name": "Pecorino Romano",  "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 387, "protein": 32,   "carbs": 0,    "fat": 28 } },
-  "butter":           { "name": "Butter",           "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 717, "protein": 0.85, "carbs": 0.06, "fat": 81 } },
-  "feta":             { "name": "Feta",             "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 264, "protein": 14,   "carbs": 4,    "fat": 21 } },
-  "milk":             { "name": "Milk",             "unit": "ml",   "category": "Dairy & Eggs",   "macros": { "calories": 42,  "protein": 3.4,  "carbs": 5,    "fat": 1 } },
   "tomato":           { "name": "Tomato",           "unit": "g",    "category": "Produce",        "macros": { "calories": 18,  "protein": 0.9,  "carbs": 3.9,  "fat": 0.2 } },
   "cucumber":         { "name": "Cucumber",         "unit": "g",    "category": "Produce",        "macros": { "calories": 15,  "protein": 0.7,  "carbs": 3.6,  "fat": 0.1 } },
   "red_onion":        { "name": "Red onion",        "unit": "g",    "category": "Produce",        "macros": { "calories": 40,  "protein": 1.1,  "carbs": 9.3,  "fat": 0.1 } },
@@ -15,10 +7,49 @@
   "olives":           { "name": "Kalamata olives",  "unit": "g",    "category": "Produce",        "macros": { "calories": 115, "protein": 0.8,  "carbs": 6,    "fat": 11 } },
   "banana":           { "name": "Banana",           "unit": "unit", "category": "Produce",        "macros": { "calories": 105, "protein": 1.3,  "carbs": 27,   "fat": 0.4 } },
   "chives":           { "name": "Chives",           "unit": "g",    "category": "Produce",        "macros": { "calories": 30,  "protein": 3.3,  "carbs": 4.4,  "fat": 0.7 } },
+  "basil":            { "name": "Basil",            "unit": "g",    "category": "Produce",        "macros": { "calories": 23,  "protein": 3.2,  "carbs": 2.6,  "fat": 0.6 } },
+  "lettuce":          { "name": "Lettuce",          "unit": "g",    "category": "Produce",        "macros": { "calories": 15,  "protein": 1.4,  "carbs": 2.9,  "fat": 0.2 } },
+  "bell_pepper":      { "name": "Bell pepper",      "unit": "g",    "category": "Produce",        "macros": { "calories": 31,  "protein": 1,    "carbs": 6,    "fat": 0.3 } },
+  "broccoli":         { "name": "Broccoli",         "unit": "g",    "category": "Produce",        "macros": { "calories": 34,  "protein": 2.8,  "carbs": 7,    "fat": 0.4 } },
+  "scallion":         { "name": "Scallion",         "unit": "g",    "category": "Produce",        "macros": { "calories": 32,  "protein": 1.8,  "carbs": 7.3,  "fat": 0.2 } },
+
+  "guanciale":        { "name": "Guanciale",        "unit": "g",    "category": "Meat",           "macros": { "calories": 600, "protein": 10,   "carbs": 0,    "fat": 60 } },
+  "ground_beef":      { "name": "Ground beef",      "unit": "g",    "category": "Meat",           "macros": { "calories": 250, "protein": 26,   "carbs": 0,    "fat": 15 } },
+  "chicken_breast":   { "name": "Chicken breast",   "unit": "g",    "category": "Meat",           "macros": { "calories": 165, "protein": 31,   "carbs": 0,    "fat": 3.6 } },
+
+  "egg":              { "name": "Egg",              "unit": "unit", "category": "Dairy & Eggs",   "macros": { "calories": 70,  "protein": 6,    "carbs": 0.5,  "fat": 5 } },
+  "pecorino":         { "name": "Pecorino Romano",  "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 387, "protein": 32,   "carbs": 0,    "fat": 28 } },
+  "butter":           { "name": "Butter",           "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 717, "protein": 0.85, "carbs": 0.06, "fat": 81 } },
+  "feta":             { "name": "Feta",             "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 264, "protein": 14,   "carbs": 4,    "fat": 21 } },
+  "milk":             { "name": "Milk",             "unit": "ml",   "category": "Dairy & Eggs",   "macros": { "calories": 42,  "protein": 3.4,  "carbs": 5,    "fat": 1 } },
+  "mozzarella":       { "name": "Mozzarella",       "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 280, "protein": 22,   "carbs": 2.2,  "fat": 22 } },
+  "cheddar":          { "name": "Cheddar",          "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 403, "protein": 25,   "carbs": 1.3,  "fat": 33 } },
+  "greek_yogurt":     { "name": "Greek yogurt",     "unit": "g",    "category": "Dairy & Eggs",   "macros": { "calories": 59,  "protein": 10,   "carbs": 3.6,  "fat": 0.4 } },
+
+  "spaghetti":        { "name": "Spaghetti",        "unit": "g",    "category": "Pasta & Grains", "macros": { "calories": 371, "protein": 13,   "carbs": 75,   "fat": 1.5 } },
+  "oats":             { "name": "Rolled oats",      "unit": "g",    "category": "Pasta & Grains", "macros": { "calories": 389, "protein": 17,   "carbs": 66,   "fat": 7 } },
+  "rice":             { "name": "Rice",             "unit": "g",    "category": "Pasta & Grains", "macros": { "calories": 365, "protein": 7,    "carbs": 80,   "fat": 0.7 } },
+
+  "pizza_dough":      { "name": "Pizza dough",      "unit": "g",    "category": "Bakery",         "macros": { "calories": 270, "protein": 9,    "carbs": 53,   "fat": 3 } },
+  "tortilla":         { "name": "Tortilla",         "unit": "unit", "category": "Bakery",         "macros": { "calories": 140, "protein": 4,    "carbs": 24,   "fat": 3.5 } },
+  "flour":            { "name": "Flour",            "unit": "g",    "category": "Bakery",         "macros": { "calories": 364, "protein": 10,   "carbs": 76,   "fat": 1 } },
+
+  "lentils":          { "name": "Lentils",          "unit": "g",    "category": "Legumes",        "macros": { "calories": 352, "protein": 25,   "carbs": 63,   "fat": 1 } },
+  "tofu":             { "name": "Tofu",             "unit": "g",    "category": "Legumes",        "macros": { "calories": 76,  "protein": 8,    "carbs": 1.9,  "fat": 4.8 } },
+
+  "sugar":            { "name": "Sugar",            "unit": "g",    "category": "Pantry",         "macros": { "calories": 387, "protein": 0,    "carbs": 100,  "fat": 0 } },
+  "baking_powder":    { "name": "Baking powder",    "unit": "g",    "category": "Pantry",         "macros": { "calories": 53,  "protein": 0,    "carbs": 28,   "fat": 0 } },
+  "soy_sauce":        { "name": "Soy sauce",        "unit": "ml",   "category": "Pantry",         "macros": { "calories": 53,  "protein": 8,    "carbs": 5,    "fat": 0.1 } },
+  "miso_paste":       { "name": "Miso paste",       "unit": "g",    "category": "Pantry",         "macros": { "calories": 199, "protein": 12,   "carbs": 26,   "fat": 6 } },
+  "coconut_milk":     { "name": "Coconut milk",     "unit": "ml",   "category": "Pantry",         "macros": { "calories": 230, "protein": 2.3,  "carbs": 6,    "fat": 24 } },
+  "wakame":           { "name": "Wakame seaweed",   "unit": "g",    "category": "Pantry",         "macros": { "calories": 45,  "protein": 3,    "carbs": 9,    "fat": 0.6 } },
+
   "black_pepper":     { "name": "Black pepper",     "unit": "g",    "category": "Spices & Oils",  "macros": { "calories": 251, "protein": 10,   "carbs": 64,   "fat": 3 } },
   "salt":             { "name": "Salt",             "unit": "g",    "category": "Spices & Oils" },
   "oregano":          { "name": "Dried oregano",    "unit": "g",    "category": "Spices & Oils",  "macros": { "calories": 265, "protein": 9,    "carbs": 69,   "fat": 4 } },
+  "curry_powder":     { "name": "Curry powder",     "unit": "g",    "category": "Spices & Oils",  "macros": { "calories": 325, "protein": 13,   "carbs": 56,   "fat": 14 } },
   "olive_oil":        { "name": "Olive oil",        "unit": "ml",   "category": "Spices & Oils",  "macros": { "calories": 884, "protein": 0,    "carbs": 0,    "fat": 100 } },
+  "sesame_oil":       { "name": "Sesame oil",       "unit": "ml",   "category": "Spices & Oils",  "macros": { "calories": 884, "protein": 0,    "carbs": 0,    "fat": 100 } },
   "honey":            { "name": "Honey",            "unit": "g",    "category": "Spices & Oils",  "macros": { "calories": 304, "protein": 0.3,  "carbs": 82,   "fat": 0 } },
   "vegetable_broth":  { "name": "Vegetable broth",  "unit": "ml",   "category": "Spices & Oils",  "macros": { "calories": 5,   "protein": 0.3,  "carbs": 0.9,  "fat": 0.1 } }
 }

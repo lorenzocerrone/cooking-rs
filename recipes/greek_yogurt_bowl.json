@@ -1,0 +1,22 @@
+{
+  "id": "greek_yogurt_bowl",
+  "title": "Greek Yogurt Bowl",
+  "servings": 1,
+  "image": "images/greek_yogurt_bowl.svg",
+  "description": "Thick Greek yogurt with oats, banana, and a drizzle of honey. High-protein, no cooking.",
+  "cuisine": "Greek",
+  "tags": ["breakfast", "vegetarian", "no-cook", "quick"],
+  "prep_time": 5,
+  "cook_time": 0,
+  "ingredients": [
+    { "ingredient": "greek_yogurt", "amount": 200 },
+    { "ingredient": "oats", "amount": 40 },
+    { "ingredient": "banana", "amount": 1 },
+    { "ingredient": "honey", "amount": 15 }
+  ],
+  "steps": [
+    "Spoon the yogurt into a bowl.",
+    "Top with oats and sliced banana.",
+    "Finish with a drizzle of honey."
+  ]
+}

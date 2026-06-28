@@ -16,6 +16,9 @@ pub const CATEGORY_ORDER: &[&str] = &[
     "Meat",
     "Dairy & Eggs",
     "Pasta & Grains",
+    "Bakery",
+    "Legumes",
+    "Pantry",
     "Spices & Oils",
 ];
 
