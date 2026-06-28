@@ -6,13 +6,20 @@ building a shareable weekly meal plan. Written in Rust with
 
 No backend, no database — recipes are plain JSON files embedded at compile time.
 
-## Features (skeleton)
+## Features
 
-- **Recipes page** — lists all recipes from `recipes/*.json`.
+- **Recipes page** — lists all recipes from `recipes/*.json`, each with a thumbnail
+  image, and supports **search plus cuisine/tag filtering**.
+- **Per-recipe images** — bundled `images/<id>.svg` assets, resolved through a
+  base-path-aware helper so they work under a subpath deploy.
+- **Nutrition** — per-recipe and per-meal macro summaries, computed from the
+  ingredient catalog when a recipe doesn't specify its own macros.
 - **Meal planner** — a 7-day × 3-slot (breakfast/lunch/dinner) grid; export the
   selection as a plain-text shopping list.
 - **Shareable state** — the meal plan is encoded into the URL hash fragment, so
   copying the URL shares the plan.
+- **Installable PWA** — `manifest.webmanifest` + service worker (`sw.js`) make the
+  app installable and offline-capable.
 
 ## Prerequisites
 
@@ -90,13 +97,18 @@ If you rename the repo or use a user/root or custom-domain page, update **both**
 ```
 ingredients.json    ingredient catalog (embedded at build time)
 recipes/            recipe data (embedded at build time)
+images/             per-recipe images (copied into dist/ via index.html)
 src/
   main.rs           entry point: mounts the app
   app.rs            router (base-path aware) + nav shell
   models.rs         Recipe / RecipeIngredient / IngredientCatalog / MealPlan
-  recipes.rs        data loading boundary (embed today, fetch-ready) + ref-validation test
+  recipes.rs        data loading boundary (embed today, fetch-ready) + validation tests
+  filter.rs         recipe search + cuisine/tag filtering
+  nutrition.rs      recipe/meal macro computation from the ingredient catalog
+  format.rs         display helpers (timing, macros, ingredient lines, asset_url)
   shopping.rs       meal plan -> summed, category-grouped shopping list
   state.rs          meal-plan <-> URL-hash encoding
-  components/       shared UI (nav)
-  pages/            recipes page + planner page
+  pwa.rs            service-worker registration
+  components/       shared UI (nav, recipe overview, add-to-planner, macro summary, modal)
+  pages/            recipes, recipe detail, planner, and ingredients pages
 ```

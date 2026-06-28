@@ -158,7 +158,10 @@ a number. Because each ingredient has exactly one unit, amounts sum with plain a
 (no unit conversion). Omitting `amount` means "to taste". Beyond the core fields, all of
 `description`, `cuisine`, `tags`, `prep_time`, `cook_time`, `image`, and `macros` are
 **optional** (`#[serde(default)]`), so older recipe files keep parsing. When `macros` is
-omitted, `nutrition::recipe_macros` computes them from the ingredient catalog.
+omitted, `nutrition::recipe_macros` computes them from the ingredient catalog. Each recipe ships
+a bundled placeholder image at `images/<id>.svg` (copied into `dist/` via `index.html`); the
+`image` path is resolved for display through `format::asset_url(BASE_PATH, …)` so it stays
+correct under a subpath deploy. A test asserts every recipe has an image.
 
 ```json
 { "id": "carbonara", "title": "…", "servings": 2,
