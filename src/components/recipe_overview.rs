@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 
-use crate::format::{format_kcal, format_macros, format_timing, ingredient_line};
+use crate::app::BASE_PATH;
+use crate::format::{asset_url, format_kcal, format_macros, format_timing, ingredient_line};
 use crate::models::{IngredientCatalog, Recipe};
 use crate::nutrition::{per_serving, recipe_macros};
 
@@ -17,7 +18,15 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
             {recipe
                 .image
                 .clone()
-                .map(|src| view! { <img class="recipe-image" src=src alt=recipe.title.clone() /> })}
+                .map(|src| {
+                    view! {
+                        <img
+                            class="recipe-image"
+                            src=asset_url(BASE_PATH, &src)
+                            alt=recipe.title.clone()
+                        />
+                    }
+                })}
 
             <p class="muted">
                 {format!("Serves {}", recipe.servings)}

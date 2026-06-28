@@ -106,6 +106,16 @@ pub fn round(n: f64) -> i64 {
     n.round() as i64
 }
 
+/// Resolve a (possibly relative) asset path against the app base path so it works
+/// under a subpath deploy (e.g. `/cooking-rs/`). Absolute URLs are returned as-is.
+pub fn asset_url(base: &str, path: &str) -> String {
+    if path.starts_with("http://") || path.starts_with("https://") || path.starts_with('/') {
+        path.to_string()
+    } else {
+        format!("{base}/{path}")
+    }
+}
+
 /// Drop a trailing `.0` so `200.0` prints as `200`, while `0.5` stays `0.5`.
 fn trim_number(n: f64) -> String {
     if n.fract() == 0.0 {
@@ -164,6 +174,22 @@ mod tests {
             fat: 28.0,
         };
         assert_eq!(format_macros(&m), "P31 · C75 · F28 g");
+    }
+
+    #[test]
+    fn asset_url_resolves_relative_and_absolute() {
+        // Relative paths get the base prefix (works on root and subpath deploys).
+        assert_eq!(asset_url("", "images/x.svg"), "/images/x.svg");
+        assert_eq!(
+            asset_url("/cooking-rs", "images/x.svg"),
+            "/cooking-rs/images/x.svg"
+        );
+        // Already-absolute paths/URLs are left untouched.
+        assert_eq!(asset_url("/cooking-rs", "/images/x.svg"), "/images/x.svg");
+        assert_eq!(
+            asset_url("/cooking-rs", "https://ex.com/x.jpg"),
+            "https://ex.com/x.jpg"
+        );
     }
 
     #[test]

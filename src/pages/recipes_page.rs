@@ -1,9 +1,10 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
+use crate::app::BASE_PATH;
 use crate::components::AddToPlanner;
 use crate::filter::{available_cuisines, available_tags, filter, RecipeQuery};
-use crate::format::{ingredient_line, total_time};
+use crate::format::{asset_url, ingredient_line, total_time};
 use crate::models::{IngredientCatalog, Recipe};
 use crate::recipes::load_data;
 
@@ -109,9 +110,18 @@ fn RecipeCard(recipe: Recipe, catalog: StoredValue<IngredientCatalog>) -> impl I
     let total = total_time(&recipe);
     let id = recipe.id.clone();
     let title = recipe.title.clone();
+    let alt = recipe.title.clone();
+    let thumb = recipe.image.clone();
 
     view! {
         <article class="recipe-card">
+            {match thumb {
+                Some(src) => view! {
+                    <img class="recipe-thumb" src=asset_url(BASE_PATH, &src) alt=alt />
+                }
+                .into_any(),
+                None => view! { <div class="recipe-thumb recipe-thumb--empty"></div> }.into_any(),
+            }}
             <h3><A href=href>{recipe.title}</A></h3>
             <p class="muted">
                 {format!("Serves {}", recipe.servings)}

@@ -2,6 +2,7 @@
   "id": "overnight_oats",
   "title": "Overnight Oats",
   "servings": 1,
+  "image": "images/overnight_oats.svg",
   "description": "Rolled oats soaked overnight in milk, sweetened with honey and topped with banana. Zero morning effort.",
   "cuisine": "American",
   "tags": ["breakfast", "vegetarian", "no-cook", "make-ahead"],

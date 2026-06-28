@@ -69,4 +69,15 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn every_recipe_has_an_image() {
+        for recipe in &load_recipes() {
+            assert!(
+                recipe.image.as_deref().is_some_and(|s| !s.is_empty()),
+                "recipe `{}` is missing an image",
+                recipe.id,
+            );
+        }
+    }
 }

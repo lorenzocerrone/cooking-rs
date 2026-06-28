@@ -2,6 +2,7 @@
   "id": "omelette",
   "title": "Classic Omelette",
   "servings": 1,
+  "image": "images/omelette.svg",
   "description": "A soft, just-set French-style omelette finished with fresh chives. Breakfast in five minutes.",
   "cuisine": "French",
   "tags": ["breakfast", "quick", "vegetarian"],

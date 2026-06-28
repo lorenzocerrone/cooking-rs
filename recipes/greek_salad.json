@@ -2,6 +2,7 @@
   "id": "greek_salad",
   "title": "Greek Salad",
   "servings": 2,
+  "image": "images/greek_salad.svg",
   "description": "Crunchy tomato, cucumber, and red onion with a slab of feta, olives, and good olive oil.",
   "cuisine": "Greek",
   "tags": ["salad", "vegetarian", "quick", "no-cook"],

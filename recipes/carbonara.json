@@ -2,6 +2,7 @@
   "id": "carbonara",
   "title": "Spaghetti Carbonara",
   "servings": 2,
+  "image": "images/carbonara.svg",
   "description": "The Roman classic: silky egg-and-pecorino sauce, crisp guanciale, and plenty of black pepper. No cream.",
   "cuisine": "Italian",
   "tags": ["pasta", "quick", "classic"],
