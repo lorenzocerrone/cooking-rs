@@ -1,0 +1,24 @@
+{
+  "id": "tomato_soup",
+  "title": "Tomato Soup",
+  "servings": 4,
+  "description": "A simple, comforting tomato soup built on onion, garlic, and a splash of broth.",
+  "cuisine": "American",
+  "tags": ["soup", "vegetarian", "comfort"],
+  "prep_time": 10,
+  "cook_time": 30,
+  "ingredients": [
+    { "ingredient": "tomato", "amount": 800 },
+    { "ingredient": "onion", "amount": 150 },
+    { "ingredient": "garlic", "amount": 15 },
+    { "ingredient": "olive_oil", "amount": 30 },
+    { "ingredient": "vegetable_broth", "amount": 500 },
+    { "ingredient": "salt" },
+    { "ingredient": "black_pepper" }
+  ],
+  "steps": [
+    "Soften the chopped onion and garlic in olive oil.",
+    "Add the tomatoes and broth; simmer for 25 minutes.",
+    "Blend until smooth, then season with salt and pepper."
+  ]
+}

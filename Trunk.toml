@@ -1,0 +1,10 @@
+[build]
+target = "index.html"
+dist = "dist"
+
+# Recipes are embedded into the wasm binary at compile time (see src/recipes.rs),
+# so they do NOT need to be copied into dist/. If we ever switch to runtime
+# fetching, uncomment the asset copy below and add a recipes/manifest.json.
+# [[copy]]
+# source = "recipes"
+# target = "recipes"

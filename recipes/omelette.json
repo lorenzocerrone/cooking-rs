@@ -1,0 +1,22 @@
+{
+  "id": "omelette",
+  "title": "Classic Omelette",
+  "servings": 1,
+  "description": "A soft, just-set French-style omelette finished with fresh chives. Breakfast in five minutes.",
+  "cuisine": "French",
+  "tags": ["breakfast", "quick", "vegetarian"],
+  "prep_time": 2,
+  "cook_time": 5,
+  "ingredients": [
+    { "ingredient": "egg", "amount": 3 },
+    { "ingredient": "butter", "amount": 15 },
+    { "ingredient": "chives", "amount": 5 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Beat the eggs with a pinch of salt.",
+    "Melt butter in a non-stick pan over medium heat.",
+    "Pour in eggs and stir gently until just set.",
+    "Fold, top with chives, and serve."
+  ]
+}

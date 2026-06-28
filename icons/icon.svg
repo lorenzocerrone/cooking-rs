@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#b5651d"/>
+  <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Fork -->
+    <path d="M180 150 v70 a26 26 0 0 0 52 0 v-70"/>
+    <path d="M206 150 v70"/>
+    <path d="M206 246 v116"/>
+    <!-- Spoon -->
+    <ellipse cx="316" cy="186" rx="34" ry="46"/>
+    <path d="M316 232 v130"/>
+  </g>
+</svg>

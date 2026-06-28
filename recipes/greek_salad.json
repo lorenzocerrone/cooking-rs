@@ -1,0 +1,25 @@
+{
+  "id": "greek_salad",
+  "title": "Greek Salad",
+  "servings": 2,
+  "description": "Crunchy tomato, cucumber, and red onion with a slab of feta, olives, and good olive oil.",
+  "cuisine": "Greek",
+  "tags": ["salad", "vegetarian", "quick", "no-cook"],
+  "prep_time": 15,
+  "cook_time": 0,
+  "ingredients": [
+    { "ingredient": "tomato", "amount": 300 },
+    { "ingredient": "cucumber", "amount": 200 },
+    { "ingredient": "red_onion", "amount": 60 },
+    { "ingredient": "feta", "amount": 120 },
+    { "ingredient": "olives", "amount": 50 },
+    { "ingredient": "olive_oil", "amount": 30 },
+    { "ingredient": "oregano", "amount": 2 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Chop the tomatoes and cucumber into chunks; thinly slice the red onion.",
+    "Combine in a bowl with the olives.",
+    "Top with a slab of feta, drizzle with olive oil, and sprinkle with oregano and salt."
+  ]
+}
