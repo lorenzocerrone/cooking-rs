@@ -4,7 +4,7 @@ use leptos_router::path;
 
 use crate::components::Nav;
 use crate::models::MealPlan;
-use crate::pages::{IngredientsPage, PlannerPage, RecipeDetailPage, RecipesPage};
+use crate::pages::{PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::state::{read_hash, write_hash};
 
 /// Router base path. Empty for local dev (served at `/`); the deploy workflow sets
@@ -42,7 +42,6 @@ pub fn App() -> impl IntoView {
                 <Routes fallback=|| view! { <p>"Page not found."</p> }>
                     <Route path=path!("/") view=RecipesPage />
                     <Route path=path!("/recipe/:id") view=RecipeDetailPage />
-                    <Route path=path!("/ingredients") view=IngredientsPage />
                     <Route path=path!("/planner") view=PlannerPage />
                 </Routes>
             </main>

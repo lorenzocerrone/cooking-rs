@@ -3,10 +3,16 @@ use std::collections::HashSet;
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::components::{MacroSummary, Modal, RecipeOverview};
-use crate::format::{format_item_quantity, format_kcal, format_macros, format_text};
+use crate::app::BASE_PATH;
+use crate::components::{
+    IconClose, IconInfo, IconPlus, IconShuffle, MacroSummary, Modal, RecipeOverview, RecipePicker,
+};
+use crate::format::{
+    asset_url, format_item_quantity, format_kcal, format_macros, format_text, format_timing, round,
+};
 use crate::models::{IngredientCatalog, MealPlan, Recipe, Slot, DAY_NAMES};
 use crate::nutrition::{day_macros, week_macros};
+use crate::prefs;
 use crate::recipes::load_data;
 use crate::shopping::{aggregate, ShoppingCategory};
 
@@ -54,9 +60,28 @@ fn PlannerGrid(
         recipes.with_value(|r| catalog.with_value(|c| week_macros(&plan.get(), r, c)))
     });
 
+    // True when no slot in the whole week has a recipe.
+    let is_empty = Memo::new(move |_| {
+        plan.with(|p| {
+            p.days.iter().all(|d| {
+                Slot::ALL
+                    .iter()
+                    .all(|&s| d.slot(s).is_none())
+            })
+        })
+    });
+
     // Recipe-overview modal state.
     let modal_open = RwSignal::new(false);
     let selected = RwSignal::new(String::new());
+
+    // Shared recipe-picker modal state (repointed before opening).
+    let picker_open = RwSignal::new(false);
+    let picker_target = RwSignal::new((0usize, Slot::Breakfast));
+
+    // Daily calorie goal — a personal setting persisted to localStorage, not part
+    // of the shared (URL-encoded) plan.
+    let goal = RwSignal::new(prefs::get_daily_goal());
 
     // Shopping-list view options (session-only, not encoded in the URL).
     let hide_to_taste = RwSignal::new(false);
@@ -79,7 +104,61 @@ fn PlannerGrid(
         let _ = window().navigator().clipboard().write_text(&text);
     };
 
+    let fill_random = move |_| fill_random_plan(plan, recipes);
+    let clear_week = move |_| {
+        if window()
+            .confirm_with_message("Clear the whole week?")
+            .unwrap_or(false)
+        {
+            plan.set(MealPlan::default());
+        }
+    };
+
     view! {
+        <div class="planner-toolbar">
+            <button type="button" class="btn-add btn-icon" on:click=fill_random>
+                <IconShuffle />
+                "Fill randomly"
+            </button>
+            <button
+                type="button"
+                class="btn-link"
+                on:click=clear_week
+                prop:disabled=move || is_empty.get()
+            >
+                "Clear week"
+            </button>
+            <label class="goal-input">
+                "Daily goal"
+                <input
+                    type="number"
+                    min="0"
+                    step="50"
+                    placeholder="e.g. 2000"
+                    prop:value=move || goal.get().map(|g| g.to_string()).unwrap_or_default()
+                    on:change=move |ev| {
+                        let parsed = event_target_value(&ev).parse::<u32>().ok().filter(|n| *n > 0);
+                        goal.set(parsed);
+                        prefs::set_daily_goal(parsed);
+                    }
+                />
+                "kcal"
+            </label>
+        </div>
+
+        <Show when=move || is_empty.get()>
+            <div class="planner-empty">
+                <p>"Your week is empty."</p>
+                <p class="muted">
+                    "Add a recipe to any meal below, or let us fill the week for you."
+                </p>
+                <button type="button" class="btn-primary btn-icon" on:click=fill_random>
+                    <IconShuffle />
+                    "Fill randomly"
+                </button>
+            </div>
+        </Show>
+
         <div class="planner-grid">
             {(0..7)
                 .map(|day| {
@@ -92,13 +171,15 @@ fn PlannerGrid(
                                     view! {
                                         <div class="slot-row">
                                             <span class="slot-label">{slot.label()}</span>
-                                            <MealSelect
+                                            <SlotCell
                                                 day=day
                                                 meal_slot=slot
                                                 recipes=recipes
                                                 plan=plan
                                                 selected=selected
                                                 modal_open=modal_open
+                                                picker_target=picker_target
+                                                picker_open=picker_open
                                             />
                                         </div>
                                     }
@@ -112,8 +193,32 @@ fn PlannerGrid(
                                         })
                                     });
                                     view! {
-                                        <span class="day-kcal">{format_kcal(m.calories)}</span>
-                                        <span class="day-pcf muted">{format_macros(&m)}</span>
+                                        <div class="day-card-totals">
+                                            <span class="day-kcal">{format_kcal(m.calories)}</span>
+                                            <span class="day-pcf muted">{format_macros(&m)}</span>
+                                        </div>
+                                        {move || {
+                                            goal.get()
+                                                .filter(|g| *g > 0)
+                                                .map(|g| {
+                                                    let ratio = m.calories / g as f64;
+                                                    let width = (ratio * 100.0).clamp(0.0, 100.0);
+                                                    let variant = if ratio < 0.9 {
+                                                        "under"
+                                                    } else if ratio <= 1.1 {
+                                                        "on-track"
+                                                    } else {
+                                                        "over"
+                                                    };
+                                                    let bar_class = format!("day-goal-bar day-goal-bar--{variant}");
+                                                    let title = format!("{} / {g} kcal", round(m.calories));
+                                                    view! {
+                                                        <div class=bar_class title=title>
+                                                            <span style=format!("width:{width}%")></span>
+                                                        </div>
+                                                    }
+                                                })
+                                        }}
                                     }
                                 }}
                             </footer>
@@ -172,7 +277,42 @@ fn PlannerGrid(
                     })
             }}
         </Modal>
+
+        <RecipePicker
+            open=picker_open
+            target=picker_target
+            recipes=recipes
+            plan=plan
+        />
     }
+}
+
+/// Fill every slot of the week with a random recipe. Seeded from the high-res
+/// timer so it varies per click, without pulling in an RNG dependency.
+fn fill_random_plan(plan: RwSignal<MealPlan>, recipes: StoredValue<Vec<Recipe>>) {
+    let ids: Vec<String> = recipes.with_value(|rs| rs.iter().map(|r| r.id.clone()).collect());
+    if ids.is_empty() {
+        return;
+    }
+
+    // xorshift64, seeded from `performance.now()` (non-zero state required).
+    let seed = window().performance().map(|p| p.now()).unwrap_or(1.0).to_bits();
+    let mut state = seed | 1;
+    let mut next = move || {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        state
+    };
+
+    plan.update(|p| {
+        for day in 0..7 {
+            for slot in Slot::ALL {
+                let idx = (next() % ids.len() as u64) as usize;
+                p.set_recipe(day, slot, Some(ids[idx].clone()));
+            }
+        }
+    });
 }
 
 #[component]
@@ -239,82 +379,128 @@ fn ShoppingList(
 }
 
 #[component]
-fn MealSelect(
+fn SlotCell(
     day: usize,
     meal_slot: Slot,
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
     selected: RwSignal<String>,
     modal_open: RwSignal<bool>,
+    picker_target: RwSignal<(usize, Slot)>,
+    picker_open: RwSignal<bool>,
 ) -> impl IntoView {
-    let current = move || {
-        plan.with(|p| p.recipe_id(day, meal_slot))
-            .unwrap_or_default()
-    };
-    let has_recipe = move || plan.with(|p| p.recipe_id(day, meal_slot)).is_some();
-
-    // The recipe's own default servings, for the chosen recipe (if any).
-    let default_servings = move || {
+    // The chosen recipe for this slot, if any (reactive).
+    let chosen = move || {
         plan.with(|p| p.recipe_id(day, meal_slot)).and_then(|id| {
-            recipes.with_value(|rs| rs.iter().find(|r| r.id == id).map(|r| r.servings))
+            recipes.with_value(|rs| rs.iter().find(|r| r.id == id).cloned())
         })
-    };
-    let servings_value = move || {
-        plan.with(|p| p.servings(day, meal_slot))
-            .or_else(default_servings)
-            .map(|s| s.to_string())
-            .unwrap_or_default()
     };
 
     view! {
         <div class="meal-cell">
-            <select
-                prop:value=current
-                on:change=move |ev| {
-                    let value = event_target_value(&ev);
-                    let value = if value.is_empty() { None } else { Some(value) };
-                    plan.update(|p| p.set_recipe(day, meal_slot, value));
+            {move || match chosen() {
+                None => {
+                    view! {
+                        <button
+                            class="slot-add btn-icon"
+                            type="button"
+                            on:click=move |_| {
+                                picker_target.set((day, meal_slot));
+                                picker_open.set(true);
+                            }
+                        >
+                            <IconPlus />
+                            "Add"
+                        </button>
+                    }
+                        .into_any()
                 }
-            >
-                <option value="">"—"</option>
-                {recipes
-                    .with_value(|rs| {
-                        rs.iter()
-                            .map(|r| {
-                                let (id, title) = (r.id.clone(), r.title.clone());
-                                view! { <option value=id>{title}</option> }
-                            })
-                            .collect_view()
-                    })}
-            </select>
-            <Show when=has_recipe>
-                <input
-                    class="servings-input"
-                    type="number"
-                    min="1"
-                    title="Servings"
-                    prop:value=servings_value
-                    on:change=move |ev| {
-                        let parsed = event_target_value(&ev).parse::<u32>().ok().filter(|n| *n > 0);
-                        // Store None when it matches the recipe default (keeps URLs short).
-                        let servings = if parsed == default_servings() { None } else { parsed };
-                        plan.update(|p| p.set_servings(day, meal_slot, servings));
-                    }
-                />
-                <button
-                    class="info-btn"
-                    type="button"
-                    title="Recipe overview"
-                    on:click=move |_| {
-                        if let Some(id) = plan.with(|p| p.recipe_id(day, meal_slot)) {
-                            selected.set(id);
-                            modal_open.set(true);
+                Some(recipe) => {
+                    let recipe_default = recipe.servings;
+                    let timing = format_timing(&recipe);
+                    let meta = format!("Serves {}{}", recipe_default, timing);
+                    let servings_value = move || {
+                        plan.with(|p| p.servings(day, meal_slot))
+                            .unwrap_or(recipe_default)
+                            .to_string()
+                    };
+                    let thumb = match recipe.image.clone() {
+                        Some(src) => {
+                            view! {
+                                <img
+                                    class="meal-chip__thumb"
+                                    src=asset_url(BASE_PATH, &src)
+                                    alt=recipe.title.clone()
+                                />
+                            }
+                                .into_any()
                         }
+                        None => {
+                            view! {
+                                <div class="meal-chip__thumb recipe-thumb--empty"></div>
+                            }
+                                .into_any()
+                        }
+                    };
+                    view! {
+                        <div class="meal-chip">
+                            {thumb}
+                            <div class="meal-chip__body">
+                                <span class="meal-chip__title" title=recipe.title.clone()>
+                                    {recipe.title.clone()}
+                                </span>
+                                <span class="meal-chip__meta muted">{meta}</span>
+                            </div>
+                            <input
+                                class="servings-input"
+                                type="number"
+                                min="1"
+                                title="Servings"
+                                prop:value=servings_value
+                                on:change=move |ev| {
+                                    let parsed = event_target_value(&ev)
+                                        .parse::<u32>()
+                                        .ok()
+                                        .filter(|n| *n > 0);
+                                    // Store None when it matches the recipe default (short URLs).
+                                    let servings = if parsed == Some(recipe_default) {
+                                        None
+                                    } else {
+                                        parsed
+                                    };
+                                    plan.update(|p| p.set_servings(day, meal_slot, servings));
+                                }
+                            />
+                            <button
+                                class="info-btn"
+                                type="button"
+                                title="Recipe overview"
+                                aria-label="Recipe overview"
+                                on:click=move |_| {
+                                    if let Some(id) = plan.with(|p| p.recipe_id(day, meal_slot)) {
+                                        selected.set(id);
+                                        modal_open.set(true);
+                                    }
+                                }
+                            >
+                                <IconInfo />
+                            </button>
+                            <button
+                                class="remove-btn"
+                                type="button"
+                                title="Remove"
+                                aria-label="Remove"
+                                on:click=move |_| {
+                                    plan.update(|p| p.set_recipe(day, meal_slot, None));
+                                }
+                            >
+                                <IconClose />
+                            </button>
+                        </div>
                     }
-                >
-                    "ⓘ"
-                </button>
-            </Show>
+                        .into_any()
+                }
+            }}
         </div>
     }
 }

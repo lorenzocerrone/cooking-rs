@@ -22,6 +22,8 @@ web-sys = { version = "0.3", features = [
     "Node",
     "HtmlHeadElement",
     "ServiceWorkerContainer",
+    "Storage",
+    "Performance",
 ] }
 
 [profile.release]

@@ -162,15 +162,17 @@ main {
 /* ── Recipe cards ────────────────────────────────────────────────────────── */
 .recipe-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
 }
 
 .recipe-card {
+  display: flex;
+  flex-direction: column;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1.1rem;
+  overflow: hidden;
   box-shadow: var(--shadow);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -185,33 +187,66 @@ main {
   width: 100%;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--radius-sm);
-  margin-bottom: 0.6rem;
+  cursor: pointer;
 }
 
 .recipe-thumb--empty {
   background: var(--surface-2);
 }
 
+.recipe-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem;
+}
+
 .recipe-card h3 {
-  margin: 0 0 0.25rem;
+  margin: 0;
   font-size: 1.1rem;
 }
 
-.recipe-card h3 a {
+.recipe-card h3 a,
+.recipe-card__title-btn {
   color: var(--fg);
   text-decoration: none;
 }
 
-.recipe-card h3 a:hover {
+.recipe-card h3 a:hover,
+.recipe-card__title-btn:hover {
   color: var(--accent);
 }
 
-.recipe-card ul {
-  margin: 0.5rem 0 0;
-  padding-left: 1.1rem;
-  font-size: 0.92rem;
+/* The card title doubles as a quick-view trigger; strip the button chrome so it
+   reads as a heading link. */
+.recipe-card__title-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recipe-card .muted {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.recipe-ingredients {
+  margin: 0;
+  font-size: 0.88rem;
   color: var(--muted);
+}
+
+/* The card body uses flex `gap` for spacing, so neutralise child margins here. */
+.recipe-card__body .recipe-desc {
+  margin: 0;
+}
+
+.recipe-card__body .badges {
+  margin-bottom: 0;
 }
 
 .recipe-desc {
@@ -237,8 +272,8 @@ main {
 }
 
 .badge-cuisine {
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* ── Recipe detail / overview ────────────────────────────────────────────── */
@@ -285,7 +320,7 @@ main {
   margin-bottom: 0.5rem;
 }
 
-/* ── Ingredients page ────────────────────────────────────────────────────── */
+/* ── Ingredient macro table (recipe overview) ────────────────────────────── */
 .ingredient-table {
   width: 100%;
   border-collapse: collapse;
@@ -337,16 +372,19 @@ main {
   padding-bottom: 0.4rem;
 }
 
+/* Each slot stacks a small caption over its control, giving the meal chip the
+   full card width (cards are narrow, ~240px). */
 .slot-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
 }
 
 .slot-label {
-  flex: none;
-  width: 4.7rem;
-  font-size: 0.85rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: var(--muted);
 }
 
@@ -358,15 +396,86 @@ main {
 
 .meal-cell {
   display: flex;
-  gap: 0.35rem;
-  align-items: center;
-  flex: 1;
   min-width: 0;
 }
 
-.meal-cell select {
+/* Empty slot: a dashed "add" affordance that opens the recipe picker. */
+.slot-add {
+  width: 100%;
+  padding: 0.4rem;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.slot-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Inline SVG icons inherit text color and sit on the text baseline. */
+.icon {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+}
+
+/* Buttons that pair an icon with a label. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+/* Filled slot: a compact chip with thumbnail, title/meta and inline controls. */
+.meal-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   flex: 1;
   min-width: 0;
+  padding: 0.3rem 0.4rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.meal-chip__thumb {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex: none;
+}
+
+.meal-chip__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.meal-chip__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meal-chip__meta {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .servings-input {
@@ -375,7 +484,16 @@ main {
   text-align: center;
 }
 
+/* Tighten the controls inside the narrow chip. */
+.meal-chip .servings-input {
+  width: 2.7rem;
+  padding: 0.2rem;
+}
+
 .info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--accent);
@@ -392,13 +510,179 @@ main {
   background: var(--accent-soft);
 }
 
+.remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 999px;
+  flex: none;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.remove-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.meal-chip .info-btn,
+.meal-chip .remove-btn {
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 0.8rem;
+}
+
+.day-card-totals {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
 .day-kcal {
   font-weight: 600;
-  margin-right: 0.4rem;
 }
 
 .day-pcf {
   font-size: 0.8rem;
+}
+
+/* Per-day progress toward the daily calorie goal. */
+.day-goal-bar {
+  margin-top: 0.35rem;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.day-goal-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.day-goal-bar--under > span {
+  background: var(--accent);
+}
+
+.day-goal-bar--on-track > span {
+  background: #5a9367;
+}
+
+.day-goal-bar--over > span {
+  background: #c0492b;
+}
+
+/* ── Planner toolbar & empty state ───────────────────────────────────────── */
+.planner-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.goal-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-left: auto;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.goal-input input {
+  width: 5rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.planner-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  text-align: center;
+  padding: 1.5rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+.planner-empty p {
+  margin: 0;
+}
+
+.planner-empty .btn-primary {
+  margin-top: 0.5rem;
+}
+
+/* ── Recipe picker modal ─────────────────────────────────────────────────── */
+.recipe-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: min(90vw, 520px);
+}
+
+.recipe-picker h4 {
+  margin: 0;
+}
+
+.recipe-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.recipe-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.5rem;
+  text-align: left;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.recipe-picker-row:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+
+.recipe-picker-row__thumb {
+  width: 3rem;
+  height: 3rem;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  flex: none;
+}
+
+.recipe-picker-row__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.recipe-picker-row__title {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.recipe-picker-row .badges {
+  margin-bottom: 0;
 }
 
 /* ── Add to planner (recipe card / detail) ───────────────────────────────── */
@@ -408,6 +692,13 @@ main {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.75rem;
+}
+
+/* In the card's flex body, push the action row to the bottom so the buttons
+   line up across cards of differing height. */
+.recipe-card__body .add-to-planner {
+  margin-top: auto;
+  padding-top: 0.5rem;
 }
 
 .btn-add {

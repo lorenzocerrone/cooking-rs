@@ -23,11 +23,33 @@ pub fn format_amount(amount: Option<f64>, unit: &str) -> String {
     }
 }
 
-/// Resolve a recipe ingredient against the catalog into a "Name — amount" line.
-pub fn ingredient_line(item: &RecipeIngredient, catalog: &IngredientCatalog) -> String {
-    match catalog.get(&item.ingredient) {
-        Some(info) => format!("{} — {}", info.name, format_amount(item.amount, &info.unit)),
-        None => format!("unknown ingredient: {}", item.ingredient),
+/// Condensed one-line ingredient preview for cards: the first `max` ingredient
+/// names joined by ", ", with a "+N more" suffix when there are extras.
+pub fn ingredient_summary(
+    items: &[RecipeIngredient],
+    catalog: &IngredientCatalog,
+    max: usize,
+) -> String {
+    let names: Vec<&str> = items
+        .iter()
+        .map(|i| {
+            catalog
+                .get(&i.ingredient)
+                .map(|info| info.name.as_str())
+                .unwrap_or("?")
+        })
+        .collect();
+    let shown = names
+        .iter()
+        .take(max)
+        .copied()
+        .collect::<Vec<_>>()
+        .join(", ");
+    let extra = names.len().saturating_sub(max);
+    if extra > 0 {
+        format!("{shown} +{extra} more")
+    } else {
+        shown
     }
 }
 
@@ -189,6 +211,47 @@ mod tests {
         assert_eq!(
             asset_url("/cooking-rs", "https://ex.com/x.jpg"),
             "https://ex.com/x.jpg"
+        );
+    }
+
+    #[test]
+    fn ingredient_summary_condenses_with_overflow() {
+        use crate::models::CatalogIngredient;
+        use std::collections::HashMap;
+
+        let mut map = HashMap::new();
+        for key in ["a", "b", "c", "d", "e", "f"] {
+            map.insert(
+                key.to_string(),
+                CatalogIngredient {
+                    name: key.to_uppercase(),
+                    unit: "g".into(),
+                    category: "Test".into(),
+                    macros: None,
+                },
+            );
+        }
+        let catalog = IngredientCatalog(map);
+        let items = |keys: &[&str]| {
+            keys.iter()
+                .map(|k| RecipeIngredient {
+                    ingredient: (*k).into(),
+                    amount: None,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        // More than `max` ingredients → first `max` names + "+N more".
+        assert_eq!(
+            ingredient_summary(&items(&["a", "b", "c", "d", "e", "f"]), &catalog, 3),
+            "A, B, C +3 more"
+        );
+        // At or below `max` → no suffix.
+        assert_eq!(ingredient_summary(&items(&["a", "b"]), &catalog, 3), "A, B");
+        // Unknown keys render as "?".
+        assert_eq!(
+            ingredient_summary(&items(&["a", "zzz"]), &catalog, 3),
+            "A, ?"
         );
     }
 

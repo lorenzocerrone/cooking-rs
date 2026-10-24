@@ -24,9 +24,27 @@ pub fn setup() {
         let _ = head.append_child(&link);
     }
 
+    // A service worker sitting in front of a live-reloading dev server is a classic
+    // source of stale, broken assets (e.g. images that "won't load" only on your
+    // machine). Only register in production. On localhost we skip registration; the
+    // worker also self-unregisters there (see `sw.js`) so any left over from an
+    // earlier session is torn down on the next load.
+    if is_local_dev() {
+        return;
+    }
+
     // navigator.serviceWorker.register("{base}/sw.js")
     let _ = window()
         .navigator()
         .service_worker()
         .register(&format!("{BASE_PATH}/sw.js"));
+}
+
+/// True when served from a local dev host (`trunk serve`).
+fn is_local_dev() -> bool {
+    window()
+        .location()
+        .hostname()
+        .map(|h| h == "localhost" || h == "127.0.0.1")
+        .unwrap_or(false)
 }

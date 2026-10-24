@@ -5,6 +5,7 @@ mod format;
 mod models;
 mod nutrition;
 mod pages;
+mod prefs;
 mod pwa;
 mod recipes;
 mod shopping;

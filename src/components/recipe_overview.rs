@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 
 use crate::app::BASE_PATH;
-use crate::format::{asset_url, format_kcal, format_macros, format_timing, ingredient_line};
+use crate::format::{asset_url, format_amount, format_kcal, format_macros, format_timing, round};
 use crate::models::{IngredientCatalog, Recipe};
-use crate::nutrition::{per_serving, recipe_macros};
+use crate::nutrition::{ingredient_macros, per_serving, recipe_macros};
 
 /// The shared summary body for a recipe: image, description, badges, per-serving
 /// macros, and the resolved ingredient list. Reused by the recipe detail page and
@@ -59,13 +59,54 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
             })}
 
             <h4>"Ingredients"</h4>
-            <ul>
-                {recipe
-                    .ingredients
-                    .iter()
-                    .map(|item| view! { <li>{ingredient_line(item, &catalog)}</li> })
-                    .collect_view()}
-            </ul>
+            <table class="ingredient-table">
+                <thead>
+                    <tr>
+                        <th>"Ingredient"</th>
+                        <th>"Amount"</th>
+                        <th>"Calories"</th>
+                        <th>"Protein"</th>
+                        <th>"Carbs"</th>
+                        <th>"Fat"</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {recipe
+                        .ingredients
+                        .iter()
+                        .map(|item| {
+                            let info = catalog.get(&item.ingredient);
+                            let name = info
+                                .map(|i| i.name.clone())
+                                .unwrap_or_else(|| format!("unknown: {}", item.ingredient));
+                            let amount = match info {
+                                Some(i) => format_amount(item.amount, &i.unit),
+                                None => format_amount(item.amount, ""),
+                            };
+                            let m = ingredient_macros(item, &catalog);
+                            view! {
+                                <tr>
+                                    <td>{name}</td>
+                                    <td>{amount}</td>
+                                    <td>{cell(m.as_ref().map(|m| m.calories))}</td>
+                                    <td>{cell(m.as_ref().map(|m| m.protein))}</td>
+                                    <td>{cell(m.as_ref().map(|m| m.carbs))}</td>
+                                    <td>{cell(m.as_ref().map(|m| m.fat))}</td>
+                                </tr>
+                            }
+                        })
+                        .collect_view()}
+                </tbody>
+            </table>
         </div>
+    }
+}
+
+/// Render a contributed-macro cell as a rounded number, or "—" when unavailable
+/// ("to taste" amounts, or ingredients lacking catalog macro data).
+fn cell(value: Option<f64>) -> String {
+    match value {
+        Some(v) => round(v).to_string(),
+        None => "—".to_string(),
     }
 }

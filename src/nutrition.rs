@@ -5,6 +5,7 @@
 
 use crate::models::{
     CatalogIngredient, DayPlan, IngredientCatalog, Macros, MealEntry, MealPlan, Recipe,
+    RecipeIngredient,
 };
 
 /// Scale every macro field by `factor`.
@@ -74,6 +75,18 @@ fn ingredient_factor(amount: f64, ingredient: &CatalogIngredient) -> f64 {
     }
 }
 
+/// The macros one recipe ingredient contributes, scaled to the amount used.
+///
+/// Returns `None` when the ingredient has no amount (`"to taste"`), is missing from
+/// the catalog, or the catalog entry carries no macro data — so the UI can render a
+/// `—` placeholder in those cases.
+pub fn ingredient_macros(item: &RecipeIngredient, catalog: &IngredientCatalog) -> Option<Macros> {
+    let amount = item.amount?;
+    let info = catalog.get(&item.ingredient)?;
+    let m = info.macros.as_ref()?;
+    Some(scale(m, ingredient_factor(amount, info)))
+}
+
 /// Whole-recipe macros.
 ///
 /// If the recipe carries explicit `macros`, those win. Otherwise macros are summed
@@ -88,11 +101,8 @@ pub fn recipe_macros(recipe: &Recipe, catalog: &IngredientCatalog) -> Option<Mac
     let mut total = Macros::default();
     let mut any = false;
     for item in &recipe.ingredients {
-        let (Some(amount), Some(info)) = (item.amount, catalog.get(&item.ingredient)) else {
-            continue;
-        };
-        if let Some(m) = &info.macros {
-            total = add(&total, &scale(m, ingredient_factor(amount, info)));
+        if let Some(m) = ingredient_macros(item, catalog) {
+            total = add(&total, &m);
             any = true;
         }
     }
@@ -171,6 +181,53 @@ mod tests {
         // 2 eggs (per-unit) + 10g butter (per 100g → 0.1×).
         assert!((m.calories - (2.0 * 70.0 + 0.1 * 717.0)).abs() < 1e-9);
         assert!((m.fat - (2.0 * 5.0 + 0.1 * 81.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn ingredient_macros_scale_to_amount() {
+        let cat = catalog();
+        // 2 eggs → per-unit macros doubled.
+        let eggs = ingredient_macros(
+            &RecipeIngredient {
+                ingredient: "egg".into(),
+                amount: Some(2.0),
+            },
+            &cat,
+        )
+        .unwrap();
+        assert!((eggs.calories - 2.0 * 70.0).abs() < 1e-9);
+        assert!((eggs.fat - 2.0 * 5.0).abs() < 1e-9);
+
+        // 10 g butter → 0.1× the per-100g macros.
+        let butter = ingredient_macros(
+            &RecipeIngredient {
+                ingredient: "butter".into(),
+                amount: Some(10.0),
+            },
+            &cat,
+        )
+        .unwrap();
+        assert!((butter.fat - 0.1 * 81.0).abs() < 1e-9);
+
+        // "to taste" (no amount) contributes nothing.
+        assert!(ingredient_macros(
+            &RecipeIngredient {
+                ingredient: "egg".into(),
+                amount: None,
+            },
+            &cat,
+        )
+        .is_none());
+
+        // Unknown ingredient → None.
+        assert!(ingredient_macros(
+            &RecipeIngredient {
+                ingredient: "nope".into(),
+                amount: Some(5.0),
+            },
+            &cat,
+        )
+        .is_none());
     }
 
     #[test]
