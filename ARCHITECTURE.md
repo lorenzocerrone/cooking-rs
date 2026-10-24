@@ -14,7 +14,9 @@ and, for sharing, in the URL.
   static host can serve — currently GitHub Pages.
 - **No server, no database.** Recipes and ingredients are plain JSON checked into the repo.
 - **Local-first, link-shareable.** The meal plan and grocery ticks persist on the device.
-  The plan is also mirrored into the URL, so copying the link shares it — no accounts.
+  A "Share" button produces a link carrying the plan in the URL fragment — no accounts.
+- **Phone first.** Designed for a phone in the kitchen and in the shop (bottom tab bar,
+  bottom sheets, tap-to-tick rows); wider screens get a top bar and a 7-column week.
 - **Correct grocery math.** Recipes use natural units ("1 onion", "3 cloves", "2 tbsp",
   "1 can"); the list converts into each ingredient's shopping unit and sums exactly.
 - **Validated data.** `cargo test` rejects any recipe or catalog file that would degrade the
@@ -53,16 +55,17 @@ and, for sharing, in the URL.
  ┌──────────────────────── browser (runtime) ───────────────────────┐
  │  main.rs  ── mounts ──►  App (app.rs)                             │
  │                          ├─ Router (base-path aware)             │
- │                          ├─ Nav                                  │
- │                          └─ Routes                               │
- │                               ├─ "/"           → RecipesPage      │
- │                               ├─ "/recipe/:id" → RecipeDetailPage │
- │                               ├─ "/planner"    → PlannerPage      │
- │                               └─ "/grocery"    → GroceryPage      │
+ │                          ├─ Nav (tab bar / top bar)              │
+ │                          ├─ Routes                               │
+ │                          │    ├─ "/"           → RecipesPage      │
+ │                          │    ├─ "/recipe/:id" → RecipeDetailPage │
+ │                          │    ├─ "/planner"    → PlannerPage      │
+ │                          │    └─ "/grocery"    → GroceryPage      │
+ │                          └─ Toast                                │
  │                                                                  │
- │  load_data() ─► Resource ─► <Suspense> ─► pages render           │
- │  App: MealPlan + GroceryState signals (context)                  │
- │       ⇄ localStorage (storage.rs)   MealPlan ⇄ URL #hash (state.rs) │
+ │  App: one Resource<AppData> (load_data) + MealPlan, GroceryState,│
+ │       own_plan (share preview) and toast signals, all in context │
+ │       ⇄ localStorage (storage.rs)   share link ⇄ #plan= (state.rs) │
  │  pwa::setup() ─► registers service worker + manifest             │
  └──────────────────────────────────────────────────────────────────┘
 ```
@@ -78,7 +81,8 @@ quantity          units, dimensions, piece specs, conversions (pure, no deps)
   ↑
 models            domain types (pure)
   ↑
-shopping/filter   pure LOGIC (aggregation, search) — returns data
+shopping/filter/  pure LOGIC (aggregation, search, extras parsing) — returns data
+extras
   ↑
 format            pure DISPLAY FORMATTING — turns data into strings (no Leptos)
   ↑
@@ -98,18 +102,22 @@ build.rs            `rerun-if-changed` for recipes/ and the catalog, so adding/r
 
 src/
   main.rs           Entry point: panic hook, pwa::setup(), mounts <App> to the body.
-  app.rs            <Router> (reads APP_BASE_PATH at compile time) + <Nav> + routes.
-                    Owns the shared MealPlan and GroceryState signals (provide_context),
-                    seeds them via storage::resolve_initial, and runs the two sync effects
-                    (localStorage save; URL-hash mirror). Exposes BASE_PATH and use_grocery().
+  app.rs            <Router> (reads APP_BASE_PATH at compile time) + <Nav> + routes + <Toast>.
+                    Owns the shared signals (MealPlan, GroceryState, own_plan, toast) and the
+                    single data Resource (provide_context), seeds them via
+                    storage::resolve_initial, clears an imported #plan= hash, and saves to
+                    localStorage on change (paused while a shared plan is previewed).
+                    Exposes BASE_PATH, href() (every in-app link must use it: the router
+                    base applies to matching only), use_plan/use_grocery/use_own_plan/
+                    use_app_data and notify().
   quantity.rs       Dimension {Mass, Volume, Count}; Unit {g, kg, ml, l, tsp, tbsp, cup, pcs}
                     with parse/as_str/to_base; Quantity; CountSpec {label, plural, per_piece};
                     resolve_unit (recipe text → Unit, incl. piece labels); to_shopping
                     (Quantity → ingredient's shopping unit, or Other(dimension) if no conversion).
   models.rs         Domain types: Recipe, RecipeIngredient {ingredient, amount?, unit?, note?,
                     optional}, CatalogIngredient {name, unit: Unit, category, count?},
-                    IngredientCatalog, MealPlan {days, extras} / DayPlan / MealEntry / Slot.
-                    All data structs deny unknown fields.
+                    IngredientCatalog, MealPlan {days, extras} / DayPlan {meals} / MealEntry /
+                    Extra {Catalog | Custom}. All data structs deny unknown fields.
   recipes.rs        Data-loading BOUNDARY. recipe_files() (per-file parse results),
                     load_recipes()/parse_catalog()/load_catalog()/load_data() → AppData.
                     Embedded today; async-first so a future HTTP loader is a one-file change.
@@ -117,31 +125,44 @@ src/
                     resolve, units convert, catalog units are base units, images exist.
   shopping.rs       Pure LOGIC: aggregate(plan, recipes, catalog) → category-grouped
                     ShoppingLines {key, name, count, subtotals (base units, primary first),
-                    to_taste, optional, sources}; extras folded in unscaled.
+                    to_taste, optional, sources, custom_quantities}; catalog extras folded
+                    in unscaled, custom extras as `custom:*` lines in the "Other" aisle (last).
   filter.rs         Pure LOGIC: RecipeQuery + filter()/available_cuisines()/available_tags().
+  extras.rs         Pure LOGIC for the free-text extras line: parse_extra ("milk 1 l" →
+                    name + quantity), suggest (catalog matches), to_extra (catalog item when
+                    the unit converts, otherwise a custom item kept as typed).
   format.rs         Pure DISPLAY FORMATTING (no Leptos): format_quantity (authored unit),
-                    format_ingredient_amount, format_subtotal (kg/l step-up, whole pieces,
-                    labels), format_line_quantity, format_text (export), timing, asset_url.
-  state.rs          Share BOUNDARY. encode/decode a MealPlan ⇄ base64 ⇄ URL #fragment;
-                    decode normalizes to 7 days.
+                    format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
+                    pieces, labels), format_line_quantity, format_text (export), timing.
+  state.rs          Share BOUNDARY. encode/decode a MealPlan ⇄ base64 ⇄ `#plan=` fragment;
+                    share_url builds the link, read_hash/clear_hash handle an opened one.
   storage.rs        Persistence BOUNDARY. PersistedState {version, plan, grocery} ⇄ JSON ⇄
                     localStorage; GroceryState {checked (with amount snapshots), omitted,
-                    hide_to_taste}; resolve_initial (hash wins); prune_checked.
+                    hide_to_taste} + visible()/remaining(); resolve_initial → Startup
+                    {state, own_plan} (a hash plan is previewed, the own plan set aside);
+                    prune_checked.
   pwa.rs            Registers the service worker + injects the manifest <link> (prod only).
   components/
-    nav.rs            Top navigation bar (active link via aria-current).
-    modal.rs          Generic Modal (open signal; closes on backdrop/Esc/button).
+    nav.rs            Recipes / Week / Grocery tabs: bottom bar on phones, top bar ≥720px
+                      (CSS); grocery badge = items left; hidden on the recipe page.
+    modal.rs          Generic Modal: bottom sheet on phones, dialog on desktop (CSS);
+                      optional title; closes on backdrop/Esc/button.
+    toast.rs          One-line confirmation set via app::notify, auto-hides.
+    stepper.rs        "− n +" control (servings).
+    recipe_filters.rs Search box + chip row (tags, cuisines) driving a RecipeQuery.
+    recipe_picker.rs  Recipe picker sheet for a day; appends to the plan.
+    add_to_week.rs    "Add to week" button + day sheet (recipe page).
     icons.rs          Inline SVG icons.
-    recipe_overview.rs RecipeOverview: image, badges, ingredient table (amount via
-                      format_ingredient_amount, note, optional); shared by detail + modals.
-    recipe_picker.rs  Searchable/filterable recipe picker modal for a planner slot.
-    add_to_planner.rs AddToPlanner: button + day/slot picker that writes the shared plan.
+    mod.rs            also today_index() (Monday = 0, from the browser clock).
   pages/
-    recipes_page.rs       Lists recipes with search/filters and a quick-view modal.
-    recipe_detail_page.rs Single recipe (/recipe/:id): <RecipeOverview> + AddToPlanner + steps.
-    planner_page.rs       7 day-cards × 3 slots (chips, servings, picker), fill/clear toolbar.
-    grocery_page.rs       Aggregated list with ticks, "have it" omissions, to-taste toggle,
-                          copy/export, and an extras editor.
+    recipes_page.rs       Compact list with search/filter chips; rows link to the recipe.
+    recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
+                          tappable steps (not persisted), AddToWeek.
+    planner_page.rs       "This week": Share button, shared-plan banner, 7 day cards (meal
+                          rows + "Add a meal"), meal sheet (servings, view, remove), clear.
+    grocery_page.rs       Aisles with tap-to-tick rows (ticked sink), swipe/hover "Have it",
+                          at-home chips, free-text extras with suggestions, to-taste toggle,
+                          copy.
 ```
 
 ### Key design boundaries
@@ -154,10 +175,13 @@ src/
   `unit` is a typed `Unit`. Conversion always targets the ingredient's shopping unit; when
   none exists the amount is kept in its own dimension rather than dropped.
 - **`state.rs` / `storage.rs` — the sharing and persistence boundaries.** Pure encode/decode
-  cores with host tests; the `window` access is two small wrappers. Startup precedence: a
-  plan in the URL hash (a shared link) wins, the device's grocery state is kept, and the merge
-  is saved immediately. Both payloads are untagged JSON with defaulted fields, so every link
-  ever shared keeps decoding; `storage` carries a `version` for future breaking changes.
+  cores with host tests; the `window` access is a few small wrappers. Startup: a plan in the
+  URL hash (a share link) is **previewed** — the device's own plan is set aside in `own_plan`,
+  nothing is saved, the hash is cleared, and the planner shows a banner with "Keep it" (adopt
+  and resume saving) or "Back to mine" (restore). Without a hash, the stored state loads.
+  Both payloads are untagged JSON with defaulted fields and backward-compatible decoders, so
+  every link ever shared keeps decoding; `storage` carries a `version` (now 2) so an older
+  build refuses a newer payload instead of misreading it.
 - **The logic ⇄ UI boundary.** `shopping.rs` and `filter.rs` are pure logic and `format.rs`
   is pure formatting. Components and pages never compute or format inline.
 
@@ -197,15 +221,17 @@ optional and old files keep parsing; unknown fields are rejected (typos fail val
 (shopping-unit) sub-total first and any unconvertible sub-total after ("2 pcs + 100 g").
 Display rounds to shop-friendly values (kg/l above 1000, whole pieces rounded up).
 
-**Meal plan** (in-memory, URL, localStorage) — `MealPlan { days: [DayPlan; 7], extras }`.
-Each `DayPlan` holds an optional `MealEntry` (recipe id + optional servings) per slot; a
-`MealEntry` serializes as a bare string when servings are default (legacy format) and as an
-object otherwise. `extras` are `RecipeIngredient`s for staples not tied to a meal; omitted when
-empty, so plans without them serialize exactly as before. `normalize()` pads decoded plans
-to 7 days.
+**Meal plan** (in-memory, share link, localStorage) — `MealPlan { days: [DayPlan; 7], extras }`.
+A `DayPlan` is a plain **list** of `MealEntry` (recipe id + optional servings) in the order
+added — no fixed breakfast/lunch/dinner slots. On the wire a day is a JSON array; the decoder
+also accepts the original `{breakfast, lunch, dinner}` object (slots become list entries). A
+`MealEntry` serializes as a bare string when servings are default and as an object otherwise.
+`extras` are `Extra`s: `Catalog(RecipeIngredient)` (the pre-existing shape, summed like recipe
+lines) or `Custom {name, quantity?}` (free text, shown as typed in the "Other" aisle);
+omitted when empty. `normalize()` pads decoded plans to 7 days.
 
 **Persisted state** (localStorage key `cooking-rs.state`) —
-`{ version, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste } }`.
+`{ version: 2, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste } }`.
 A tick remembers the amounts it was made at and is dropped when the plan changes them;
 omissions are sticky.
 
@@ -232,7 +258,11 @@ every recipe image exists on disk.
   root/custom-domain page is used (then `/` and `""`).
 - **PWA assets:** `manifest.webmanifest`, `sw.js`, and `icons/` are copied into `dist/` via
   `data-trunk` directives in `index.html`; the service worker is network-first with a cache
-  fallback and only caches successful same-origin responses.
+  fallback and only caches successful same-origin responses. Fonts (Space Grotesk, Space
+  Mono) come from Google Fonts and fall back to system faces offline.
+- **Styling:** plain CSS in `style.css`, tokens on `:root` (light) overridden under
+  `prefers-color-scheme: dark`. Phone first: the tab bar, sheets and row interactions are
+  the base; `min-width: 720px` (top bar, dialogs) and `900px` (7-column week) widen it.
 
 ## 7. Roadmap
 
@@ -250,9 +280,16 @@ every recipe image exists on disk.
   aggregation with sub-totals, sources, optional/to-taste flags and extras; localStorage
   persistence with tick pruning and "have at home"; dedicated grocery page.
 
+- **Phase 6 — UX pass (phone first).** Parchment/sienna look in the family of `panetti`;
+  bottom tab bar with grocery badge; compact recipe list; recipe page with servings stepper
+  and tappable steps; days as meal lists with sheets for picking and editing; grocery rows
+  with tap-to-tick and swipe "Have it", free-text extras with catalog suggestions; share
+  button + shared-plan preview banner; dark mode.
+
 ### Next
-- **UX pass.** Visual redesign now that the core is stable: grocery page layout, mobile
-  planner, shared-link banner, "why is this on the list" (sources) tooltip.
+- **Reorder meals within a day** and move a meal to another day.
+- **Real photos** (the recipe page has no image until then; `image` stays validated).
+- **"Why is this on the list"** (sources) on a grocery row.
 - **More recipes and catalog coverage** (densities for "1 cup flour" are a one-arm extension
   of `to_shopping`).
 
