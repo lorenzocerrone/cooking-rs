@@ -1,6 +1,7 @@
 use leptos::prelude::*;
+use leptos_router::components::A;
 
-use crate::app::use_grocery;
+use crate::app::{href, use_grocery};
 use crate::format::{format_ingredient_amount, format_line_quantity, format_text};
 use crate::models::{IngredientCatalog, MealPlan, Recipe, RecipeIngredient};
 use crate::recipes::load_data;
@@ -19,7 +20,7 @@ pub fn GroceryPage() -> impl IntoView {
         <h1>"Grocery list"</h1>
         <p class="muted">
             "Built from your "
-            <leptos_router::components::A href="/planner">"meal plan"</leptos_router::components::A>
+            <A href=href("/planner")>"meal plan"</A>
             ". Tick things off as you shop; ticks reset when a plan change alters the amount."
         </p>
 

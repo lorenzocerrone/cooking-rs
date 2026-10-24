@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::BASE_PATH;
+use crate::app::{href, BASE_PATH};
 use crate::components::{
     IconClose, IconInfo, IconPlus, IconShuffle, Modal, RecipeOverview, RecipePicker,
 };
@@ -78,7 +78,7 @@ fn PlannerGrid(
             >
                 "Clear week"
             </button>
-            <A href="/grocery" attr:class="btn-link planner-toolbar__grocery">
+            <A href=href("/grocery") attr:class="btn-link planner-toolbar__grocery">
                 "Grocery list →"
             </A>
         </div>
@@ -135,7 +135,7 @@ fn PlannerGrid(
                     .with_value(|rs| rs.iter().find(|r| r.id == id).cloned())
                     .map(|recipe| {
                         let cat = catalog.with_value(|c| c.clone());
-                        let href = format!("/recipe/{}", recipe.id);
+                        let href = href(&format!("/recipe/{}", recipe.id));
                         view! {
                             <RecipeOverview recipe=recipe catalog=cat />
                             <A

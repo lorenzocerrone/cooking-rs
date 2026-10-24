@@ -16,6 +16,19 @@ pub const BASE_PATH: &str = match option_env!("APP_BASE_PATH") {
     None => "",
 };
 
+/// Prefix an absolute in-app route with a deploy base path. `leptos_router`
+/// applies `Router base` to route *matching* only: an `<A href="/planner">` is
+/// emitted verbatim, which under `/cooking-rs/` would leave the app. Every
+/// in-app link therefore goes through [`href`].
+pub fn route_url(base: &str, path: &str) -> String {
+    format!("{base}{path}")
+}
+
+/// [`route_url`] against the compile-time [`BASE_PATH`], for `<A href=...>`.
+pub fn href(path: &str) -> String {
+    route_url(BASE_PATH, path)
+}
+
 /// Root component: the nav shell plus client-side routing.
 #[component]
 pub fn App() -> impl IntoView {
@@ -65,4 +78,21 @@ pub fn App() -> impl IntoView {
 /// Convenience for pages: the shared grocery state.
 pub fn use_grocery() -> RwSignal<GroceryState> {
     expect_context::<RwSignal<GroceryState>>()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_url;
+
+    #[test]
+    fn route_url_prefixes_base_path() {
+        assert_eq!(route_url("", "/planner"), "/planner");
+        assert_eq!(route_url("", "/"), "/");
+        assert_eq!(route_url("/cooking-rs", "/planner"), "/cooking-rs/planner");
+        assert_eq!(route_url("/cooking-rs", "/"), "/cooking-rs/");
+        assert_eq!(
+            route_url("/cooking-rs", "/recipe/lentil_dal"),
+            "/cooking-rs/recipe/lentil_dal"
+        );
+    }
 }

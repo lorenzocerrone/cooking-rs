@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::BASE_PATH;
+use crate::app::{href, BASE_PATH};
 use crate::components::{AddToPlanner, Modal, RecipeOverview};
 use crate::filter::{available_cuisines, available_tags, filter, RecipeQuery};
 use crate::format::{asset_url, ingredient_summary, total_time};
@@ -99,7 +99,7 @@ fn RecipeBrowser(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoV
                     .with_value(|rs| rs.iter().find(|r| r.id == id).cloned())
                     .map(|recipe| {
                         let cat = catalog.with_value(|c| c.clone());
-                        let href = format!("/recipe/{}", recipe.id);
+                        let href = href(&format!("/recipe/{}", recipe.id));
                         view! {
                             <RecipeOverview recipe=recipe catalog=cat />
                             <A
