@@ -1,18 +1,14 @@
 use leptos::prelude::*;
 
 use crate::app::BASE_PATH;
-use crate::format::{asset_url, format_amount, format_kcal, format_macros, format_timing, round};
+use crate::format::{asset_url, format_amount, format_timing};
 use crate::models::{IngredientCatalog, Recipe};
-use crate::nutrition::{ingredient_macros, per_serving, recipe_macros};
 
-/// The shared summary body for a recipe: image, description, badges, per-serving
-/// macros, and the resolved ingredient list. Reused by the recipe detail page and
-/// the planner's overview modal so the two never drift apart.
+/// The shared summary body for a recipe: image, description, badges, and the
+/// resolved ingredient list. Reused by the recipe detail page and the planner's
+/// overview modal so the two never drift apart.
 #[component]
 pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
-    let per_serving_macros =
-        recipe_macros(&recipe, &catalog).map(|m| per_serving(&m, recipe.servings));
-
     view! {
         <div class="recipe-overview">
             {recipe
@@ -48,26 +44,12 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
                     .collect_view()}
             </div>
 
-            {per_serving_macros.map(|m| {
-                view! {
-                    <p class="overview-macros">
-                        <strong>{format_kcal(m.calories)}</strong>
-                        " / serving · "
-                        {format_macros(&m)}
-                    </p>
-                }
-            })}
-
             <h4>"Ingredients"</h4>
             <table class="ingredient-table">
                 <thead>
                     <tr>
                         <th>"Ingredient"</th>
                         <th>"Amount"</th>
-                        <th>"Calories"</th>
-                        <th>"Protein"</th>
-                        <th>"Carbs"</th>
-                        <th>"Fat"</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -83,15 +65,10 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
                                 Some(i) => format_amount(item.amount, &i.unit),
                                 None => format_amount(item.amount, ""),
                             };
-                            let m = ingredient_macros(item, &catalog);
                             view! {
                                 <tr>
                                     <td>{name}</td>
                                     <td>{amount}</td>
-                                    <td>{cell(m.as_ref().map(|m| m.calories))}</td>
-                                    <td>{cell(m.as_ref().map(|m| m.protein))}</td>
-                                    <td>{cell(m.as_ref().map(|m| m.carbs))}</td>
-                                    <td>{cell(m.as_ref().map(|m| m.fat))}</td>
                                 </tr>
                             }
                         })
@@ -99,14 +76,5 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
                 </tbody>
             </table>
         </div>
-    }
-}
-
-/// Render a contributed-macro cell as a rounded number, or "—" when unavailable
-/// ("to taste" amounts, or ingredients lacking catalog macro data).
-fn cell(value: Option<f64>) -> String {
-    match value {
-        Some(v) => round(v).to_string(),
-        None => "—".to_string(),
     }
 }

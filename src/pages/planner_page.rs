@@ -5,20 +5,16 @@ use leptos_router::components::A;
 
 use crate::app::BASE_PATH;
 use crate::components::{
-    IconClose, IconInfo, IconPlus, IconShuffle, MacroSummary, Modal, RecipeOverview, RecipePicker,
+    IconClose, IconInfo, IconPlus, IconShuffle, Modal, RecipeOverview, RecipePicker,
 };
-use crate::format::{
-    asset_url, format_item_quantity, format_kcal, format_macros, format_text, format_timing, round,
-};
+use crate::format::{asset_url, format_item_quantity, format_text, format_timing};
 use crate::models::{IngredientCatalog, MealPlan, Recipe, Slot, DAY_NAMES};
-use crate::nutrition::{day_macros, week_macros};
-use crate::prefs;
 use crate::recipes::load_data;
 use crate::shopping::{aggregate, ShoppingCategory};
 
 /// Weekly meal planner: a responsive grid of day-cards whose state is the shared
-/// meal plan (mirrored into the URL hash by `App`), plus per-day/week macros and a
-/// category-grouped shopping list.
+/// meal plan (mirrored into the URL hash by `App`), plus a category-grouped
+/// shopping list.
 #[component]
 pub fn PlannerPage() -> impl IntoView {
     // Shared, app-wide meal plan (provided by `App`, synced to the URL hash there).
@@ -55,19 +51,12 @@ fn PlannerGrid(
         recipes.with_value(|r| catalog.with_value(|c| aggregate(&plan.get(), r, c)))
     });
 
-    // Week-total macros (pure aggregation in `crate::nutrition`).
-    let week = Memo::new(move |_| {
-        recipes.with_value(|r| catalog.with_value(|c| week_macros(&plan.get(), r, c)))
-    });
-
     // True when no slot in the whole week has a recipe.
     let is_empty = Memo::new(move |_| {
         plan.with(|p| {
-            p.days.iter().all(|d| {
-                Slot::ALL
-                    .iter()
-                    .all(|&s| d.slot(s).is_none())
-            })
+            p.days
+                .iter()
+                .all(|d| Slot::ALL.iter().all(|&s| d.slot(s).is_none()))
         })
     });
 
@@ -78,10 +67,6 @@ fn PlannerGrid(
     // Shared recipe-picker modal state (repointed before opening).
     let picker_open = RwSignal::new(false);
     let picker_target = RwSignal::new((0usize, Slot::Breakfast));
-
-    // Daily calorie goal — a personal setting persisted to localStorage, not part
-    // of the shared (URL-encoded) plan.
-    let goal = RwSignal::new(prefs::get_daily_goal());
 
     // Shopping-list view options (session-only, not encoded in the URL).
     let hide_to_taste = RwSignal::new(false);
@@ -128,22 +113,6 @@ fn PlannerGrid(
             >
                 "Clear week"
             </button>
-            <label class="goal-input">
-                "Daily goal"
-                <input
-                    type="number"
-                    min="0"
-                    step="50"
-                    placeholder="e.g. 2000"
-                    prop:value=move || goal.get().map(|g| g.to_string()).unwrap_or_default()
-                    on:change=move |ev| {
-                        let parsed = event_target_value(&ev).parse::<u32>().ok().filter(|n| *n > 0);
-                        goal.set(parsed);
-                        prefs::set_daily_goal(parsed);
-                    }
-                />
-                "kcal"
-            </label>
         </div>
 
         <Show when=move || is_empty.get()>
@@ -185,55 +154,10 @@ fn PlannerGrid(
                                     }
                                 })
                                 .collect_view()}
-                            <footer class="day-card-cal">
-                                {move || {
-                                    let m = recipes.with_value(|r| {
-                                        catalog.with_value(|c| {
-                                            plan.with(|p| day_macros(&p.days[day], r, c))
-                                        })
-                                    });
-                                    view! {
-                                        <div class="day-card-totals">
-                                            <span class="day-kcal">{format_kcal(m.calories)}</span>
-                                            <span class="day-pcf muted">{format_macros(&m)}</span>
-                                        </div>
-                                        {move || {
-                                            goal.get()
-                                                .filter(|g| *g > 0)
-                                                .map(|g| {
-                                                    let ratio = m.calories / g as f64;
-                                                    let width = (ratio * 100.0).clamp(0.0, 100.0);
-                                                    let variant = if ratio < 0.9 {
-                                                        "under"
-                                                    } else if ratio <= 1.1 {
-                                                        "on-track"
-                                                    } else {
-                                                        "over"
-                                                    };
-                                                    let bar_class = format!("day-goal-bar day-goal-bar--{variant}");
-                                                    let title = format!("{} / {g} kcal", round(m.calories));
-                                                    view! {
-                                                        <div class=bar_class title=title>
-                                                            <span style=format!("width:{width}%")></span>
-                                                        </div>
-                                                    }
-                                                })
-                                        }}
-                                    }
-                                }}
-                            </footer>
                         </div>
                     }
                 })
                 .collect_view()}
-        </div>
-
-        <div class="week-summary">
-            {move || {
-                let w = week.get();
-                let avg = format!("avg {} / day", format_kcal(w.calories / 7.0));
-                view! { <MacroSummary title="Week total" macros=w subtitle=avg /> }
-            }}
         </div>
 
         <h2>"Shopping list"</h2>
@@ -296,7 +220,11 @@ fn fill_random_plan(plan: RwSignal<MealPlan>, recipes: StoredValue<Vec<Recipe>>)
     }
 
     // xorshift64, seeded from `performance.now()` (non-zero state required).
-    let seed = window().performance().map(|p| p.now()).unwrap_or(1.0).to_bits();
+    let seed = window()
+        .performance()
+        .map(|p| p.now())
+        .unwrap_or(1.0)
+        .to_bits();
     let mut state = seed | 1;
     let mut next = move || {
         state ^= state << 13;
@@ -391,9 +319,8 @@ fn SlotCell(
 ) -> impl IntoView {
     // The chosen recipe for this slot, if any (reactive).
     let chosen = move || {
-        plan.with(|p| p.recipe_id(day, meal_slot)).and_then(|id| {
-            recipes.with_value(|rs| rs.iter().find(|r| r.id == id).cloned())
-        })
+        plan.with(|p| p.recipe_id(day, meal_slot))
+            .and_then(|id| recipes.with_value(|rs| rs.iter().find(|r| r.id == id).cloned()))
     };
 
     view! {

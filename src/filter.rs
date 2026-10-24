@@ -75,7 +75,6 @@ mod tests {
             prep_time: None,
             cook_time: None,
             image: None,
-            macros: None,
         }
     }
 

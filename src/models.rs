@@ -6,21 +6,6 @@ use std::collections::HashMap;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Nutritional macros. On a [`Recipe`] these are the totals for the whole recipe
-/// (all servings); on a [`CatalogIngredient`] they are per 100 g/ml (for weight
-/// and volume units) or per 1 for the `"unit"` unit.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
-pub struct Macros {
-    #[serde(default)]
-    pub calories: f64,
-    #[serde(default)]
-    pub protein: f64,
-    #[serde(default)]
-    pub carbs: f64,
-    #[serde(default)]
-    pub fat: f64,
-}
-
 /// A single recipe, as authored in `recipes/*.json`. Ingredients reference the
 /// central catalog ([`IngredientCatalog`]) by key rather than embedding their own
 /// names/units, so amounts can be summed across recipes.
@@ -53,10 +38,6 @@ pub struct Recipe {
     /// Optional image URL/path (image hosting itself is a non-goal).
     #[serde(default)]
     pub image: Option<String>,
-    /// Explicit whole-recipe macros. When absent, macros are computed from the
-    /// ingredient catalog (see [`crate::nutrition`]).
-    #[serde(default)]
-    pub macros: Option<Macros>,
 }
 
 /// A recipe's reference to a catalog ingredient. `amount: None` means "to taste"
@@ -78,9 +59,6 @@ pub struct CatalogIngredient {
     pub unit: String,
     /// Shopping-aisle grouping (e.g. "Produce", "Dairy & Eggs").
     pub category: String,
-    /// Macros per 100 g/ml (or per 1 for the `"unit"` unit). Optional.
-    #[serde(default)]
-    pub macros: Option<Macros>,
 }
 
 /// The full ingredient catalog: `key -> entry`.

@@ -292,17 +292,6 @@ main {
   margin-bottom: 0.5rem;
 }
 
-.overview-macros {
-  background: var(--accent-soft);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem 0.75rem;
-  display: inline-block;
-}
-
-.overview-macros strong {
-  color: var(--accent-hover);
-}
-
 .recipe-overview h4 {
   margin: 0.75rem 0 0.35rem;
 }
@@ -320,7 +309,7 @@ main {
   margin-bottom: 0.5rem;
 }
 
-/* ── Ingredient macro table (recipe overview) ────────────────────────────── */
+/* ── Ingredient table (recipe overview) ──────────────────────────────────── */
 .ingredient-table {
   width: 100%;
   border-collapse: collapse;
@@ -386,12 +375,6 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--muted);
-}
-
-.day-card-cal {
-  margin-top: auto;
-  padding-top: 0.4rem;
-  border-top: 1px dashed var(--border);
 }
 
 .meal-cell {
@@ -535,48 +518,6 @@ main {
   font-size: 0.8rem;
 }
 
-.day-card-totals {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.4rem;
-}
-
-.day-kcal {
-  font-weight: 600;
-}
-
-.day-pcf {
-  font-size: 0.8rem;
-}
-
-/* Per-day progress toward the daily calorie goal. */
-.day-goal-bar {
-  margin-top: 0.35rem;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  overflow: hidden;
-}
-
-.day-goal-bar > span {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-}
-
-.day-goal-bar--under > span {
-  background: var(--accent);
-}
-
-.day-goal-bar--on-track > span {
-  background: #5a9367;
-}
-
-.day-goal-bar--over > span {
-  background: #c0492b;
-}
-
 /* ── Planner toolbar & empty state ───────────────────────────────────────── */
 .planner-toolbar {
   display: flex;
@@ -584,21 +525,6 @@ main {
   align-items: center;
   gap: 0.75rem;
   margin: 0.75rem 0 1rem;
-}
-
-.goal-input {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-left: auto;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--muted);
-}
-
-.goal-input input {
-  width: 5rem;
-  padding: 0.3rem 0.4rem;
 }
 
 .planner-empty {
@@ -742,43 +668,6 @@ main {
 
 .planner-picker .btn-primary {
   align-self: flex-start;
-}
-
-/* ── Week summary / macro card ───────────────────────────────────────────── */
-.week-summary {
-  margin-top: 1rem;
-}
-
-.macro-summary {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.85rem 1.1rem;
-  background: var(--accent-soft);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.macro-summary-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
-.macro-summary-kcal {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--accent-hover);
-}
-
-.macro-summary-macros {
-  font-size: 0.9rem;
-}
-
-.macro-summary-sub {
-  font-size: 0.85rem;
 }
 
 /* ── Shopping list ───────────────────────────────────────────────────────── */

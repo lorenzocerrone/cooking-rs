@@ -4,7 +4,7 @@
 //! types** — the component/page layer calls into here so that what something
 //! *says* is decoupled from how the logic computes it and how the view renders it.
 
-use crate::models::{IngredientCatalog, Macros, Recipe, RecipeIngredient};
+use crate::models::{IngredientCatalog, Recipe, RecipeIngredient};
 use crate::shopping::{ShoppingCategory, ShoppingItem};
 
 /// Format a numeric amount + unit for display. `None` amount renders "to taste".
@@ -84,21 +84,6 @@ pub fn format_text(categories: &[ShoppingCategory]) -> String {
     out.trim_end().to_string()
 }
 
-/// Calories formatted with thousands separators, e.g. `1850.0 → "1,850 kcal"`.
-pub fn format_kcal(calories: f64) -> String {
-    format!("{} kcal", group_thousands(round(calories)))
-}
-
-/// Compact protein/carb/fat line, e.g. `"P31 · C75 · F28 g"`.
-pub fn format_macros(m: &Macros) -> String {
-    format!(
-        "P{} · C{} · F{} g",
-        round(m.protein),
-        round(m.carbs),
-        round(m.fat)
-    )
-}
-
 /// Total time (prep + cook) in minutes, if either is set.
 pub fn total_time(recipe: &Recipe) -> Option<u32> {
     match (recipe.prep_time, recipe.cook_time) {
@@ -123,11 +108,6 @@ pub fn format_timing(recipe: &Recipe) -> String {
     }
 }
 
-/// Round to a whole number for display.
-pub fn round(n: f64) -> i64 {
-    n.round() as i64
-}
-
 /// Resolve a (possibly relative) asset path against the app base path so it works
 /// under a subpath deploy (e.g. `/cooking-rs/`). Absolute URLs are returned as-is.
 pub fn asset_url(base: &str, path: &str) -> String {
@@ -147,25 +127,6 @@ fn trim_number(n: f64) -> String {
     }
 }
 
-/// Insert thousands separators into an integer: `1850 → "1,850"`.
-fn group_thousands(n: i64) -> String {
-    let digits = n.abs().to_string();
-    let bytes = digits.as_bytes();
-    let len = bytes.len();
-    let mut out = String::with_capacity(len + len / 3);
-    for (i, b) in bytes.iter().enumerate() {
-        if i > 0 && (len - i).is_multiple_of(3) {
-            out.push(',');
-        }
-        out.push(*b as char);
-    }
-    if n < 0 {
-        format!("-{out}")
-    } else {
-        out
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,26 +137,6 @@ mod tests {
         assert_eq!(format_amount(Some(0.5), "g"), "0.5 g");
         assert_eq!(format_amount(Some(4.0), "unit"), "4");
         assert_eq!(format_amount(None, "g"), "to taste");
-    }
-
-    #[test]
-    fn kcal_grouping() {
-        assert_eq!(format_kcal(0.0), "0 kcal");
-        assert_eq!(format_kcal(950.4), "950 kcal");
-        assert_eq!(format_kcal(1850.0), "1,850 kcal");
-        assert_eq!(format_kcal(9200.0), "9,200 kcal");
-        assert_eq!(format_kcal(1234567.0), "1,234,567 kcal");
-    }
-
-    #[test]
-    fn macros_line() {
-        let m = Macros {
-            calories: 620.0,
-            protein: 31.2,
-            carbs: 74.8,
-            fat: 28.0,
-        };
-        assert_eq!(format_macros(&m), "P31 · C75 · F28 g");
     }
 
     #[test]
@@ -227,7 +168,6 @@ mod tests {
                     name: key.to_uppercase(),
                     unit: "g".into(),
                     category: "Test".into(),
-                    macros: None,
                 },
             );
         }
@@ -269,7 +209,6 @@ mod tests {
             prep_time: Some(10),
             cook_time: Some(15),
             image: None,
-            macros: None,
         };
         assert_eq!(total_time(&r), Some(25));
         assert_eq!(format_timing(&r), " · 10 min prep · 15 min cook");
