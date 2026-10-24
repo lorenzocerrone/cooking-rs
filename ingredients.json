@@ -42,7 +42,7 @@
   "soy_sauce":        { "name": "Soy sauce",        "unit": "ml",   "category": "Pantry" },
   "miso_paste":       { "name": "Miso paste",       "unit": "g",    "category": "Pantry" },
   "coconut_milk":     { "name": "Coconut milk",     "unit": "ml",   "category": "Pantry",         "count": { "label": "can", "per_piece": 400 } },
-  "chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "g",    "category": "Pantry",         "count": { "label": "can", "per_piece": 400 } },
+  "chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "pcs",  "category": "Pantry",         "count": { "label": "can", "per_piece": 400 } },
   "wakame":           { "name": "Wakame seaweed",   "unit": "g",    "category": "Pantry" },
 
   "black_pepper":     { "name": "Black pepper",     "unit": "g",    "category": "Spices & Oils" },

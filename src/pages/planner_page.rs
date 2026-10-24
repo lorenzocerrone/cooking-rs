@@ -1,19 +1,17 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::{use_grocery, BASE_PATH};
+use crate::app::BASE_PATH;
 use crate::components::{
     IconClose, IconInfo, IconPlus, IconShuffle, Modal, RecipeOverview, RecipePicker,
 };
-use crate::format::{asset_url, format_line_quantity, format_text, format_timing};
+use crate::format::{asset_url, format_timing};
 use crate::models::{IngredientCatalog, MealPlan, Recipe, Slot, DAY_NAMES};
 use crate::recipes::load_data;
-use crate::shopping::{aggregate, ShoppingCategory};
-use crate::storage::GroceryState;
 
 /// Weekly meal planner: a responsive grid of day-cards whose state is the shared
-/// meal plan (mirrored into the URL hash by `App`), plus a category-grouped
-/// shopping list.
+/// meal plan (persisted and mirrored into the URL hash by `App`). The grocery
+/// list derived from it lives on its own page (`/grocery`).
 #[component]
 pub fn PlannerPage() -> impl IntoView {
     // Shared, app-wide meal plan (provided by `App`, synced to the URL hash there).
@@ -45,11 +43,6 @@ fn PlannerGrid(
     let recipes = StoredValue::new(recipes);
     let catalog = StoredValue::new(catalog);
 
-    // Live, reactive shopping list derived from the current plan.
-    let shopping = Memo::new(move |_| {
-        recipes.with_value(|r| catalog.with_value(|c| aggregate(&plan.get(), r, c)))
-    });
-
     // True when the week has no meals and no extras.
     let is_empty = Memo::new(move |_| plan.with(|p| p.is_empty()));
 
@@ -60,39 +53,6 @@ fn PlannerGrid(
     // Shared recipe-picker modal state (repointed before opening).
     let picker_open = RwSignal::new(false);
     let picker_target = RwSignal::new((0usize, Slot::Breakfast));
-
-    // Grocery check-offs and view options: shared, persisted per device.
-    let grocery = use_grocery();
-
-    // Forget ticks for lines that disappeared or changed amount.
-    Effect::new(move |_| {
-        let lines: Vec<_> = shopping.get().into_iter().flat_map(|c| c.lines).collect();
-        let mut g = grocery.get_untracked();
-        if g.prune_checked(&lines) {
-            grocery.set(g);
-        }
-    });
-
-    // The list actually shown/exported, after the "omit to taste" toggle and the
-    // user's "have at home" omissions.
-    let visible = Memo::new(move |_| {
-        let mut cats = shopping.get();
-        grocery.with(|g| {
-            for cat in cats.iter_mut() {
-                cat.lines.retain(|line| {
-                    let shown_to_taste = !g.hide_to_taste || !line.subtotals.is_empty();
-                    shown_to_taste && !g.is_omitted(&line.key)
-                });
-            }
-        });
-        cats.retain(|cat| !cat.lines.is_empty());
-        cats
-    });
-
-    let copy_list = move |_| {
-        let text = format_text(&visible.get());
-        let _ = window().navigator().clipboard().write_text(&text);
-    };
 
     let fill_random = move |_| fill_random_plan(plan, recipes);
     let clear_week = move |_| {
@@ -118,6 +78,9 @@ fn PlannerGrid(
             >
                 "Clear week"
             </button>
+            <A href="/grocery" attr:class="btn-link planner-toolbar__grocery">
+                "Grocery list →"
+            </A>
         </div>
 
         <Show when=move || is_empty.get()>
@@ -164,29 +127,6 @@ fn PlannerGrid(
                 })
                 .collect_view()}
         </div>
-
-        <h2>"Shopping list"</h2>
-        <div class="shopping-controls">
-            <button type="button" class="btn-primary" on:click=copy_list>"Copy to clipboard"</button>
-            <label>
-                <input
-                    type="checkbox"
-                    prop:checked=move || grocery.with(|g| g.hide_to_taste)
-                    on:change=move |ev| {
-                        let v = event_target_checked(&ev);
-                        grocery.update(|g| g.hide_to_taste = v);
-                    }
-                />
-                " Omit \"to taste\" items"
-            </label>
-        </div>
-        <ShoppingList categories=visible grocery=grocery catalog=catalog />
-        <textarea
-            class="shopping-list"
-            prop:value=move || format_text(&visible.get())
-            readonly
-            placeholder="Your shopping list will appear here."
-        ></textarea>
 
         <Modal open=modal_open>
             {move || {
@@ -249,112 +189,6 @@ fn fill_random_plan(plan: RwSignal<MealPlan>, recipes: StoredValue<Vec<Recipe>>)
             }
         }
     });
-}
-
-#[component]
-fn ShoppingList(
-    categories: Memo<Vec<ShoppingCategory>>,
-    grocery: RwSignal<GroceryState>,
-    catalog: StoredValue<IngredientCatalog>,
-) -> impl IntoView {
-    // Names of the ingredients the user marked as "have at home", for restoring.
-    let omitted = move || {
-        grocery.with(|g| {
-            g.omitted
-                .iter()
-                .map(|key| {
-                    let name = catalog.with_value(|c| {
-                        c.get(key)
-                            .map(|i| i.name.clone())
-                            .unwrap_or_else(|| key.clone())
-                    });
-                    (key.clone(), name)
-                })
-                .collect::<Vec<_>>()
-        })
-    };
-
-    view! {
-        {move || {
-            let cats = categories.get();
-            if cats.is_empty() {
-                view! { <p class="muted">"No meals selected yet."</p> }.into_any()
-            } else {
-                cats.into_iter()
-                    .map(|cat| {
-                        view! {
-                            <section>
-                                <h3>{cat.name}</h3>
-                                <ul class="shopping-items">
-                                    {cat.lines
-                                        .into_iter()
-                                        .map(|line| {
-                                            let qty = format_line_quantity(&line);
-                                            let label = format!("{}: {}", line.name, qty);
-                                            // Keyed by catalog key: stable across renames.
-                                            let key = StoredValue::new(line.key.clone());
-                                            let is_checked = move || {
-                                                key.with_value(|k| grocery.with(|g| g.is_checked(k)))
-                                            };
-                                            let line = StoredValue::new(line);
-                                            view! {
-                                                <li class:checked=is_checked>
-                                                    <label>
-                                                        <input
-                                                            type="checkbox"
-                                                            prop:checked=is_checked
-                                                            on:change=move |_| {
-                                                                line.with_value(|l| grocery.update(|g| g.toggle_checked(l)));
-                                                            }
-                                                        />
-                                                        {label}
-                                                    </label>
-                                                    <button
-                                                        type="button"
-                                                        class="btn-link shopping-skip"
-                                                        title="I have this at home — leave it off the list"
-                                                        on:click=move |_| {
-                                                            key.with_value(|k| grocery.update(|g| g.toggle_omitted(k)));
-                                                        }
-                                                    >
-                                                        "have it"
-                                                    </button>
-                                                </li>
-                                            }
-                                        })
-                                        .collect_view()}
-                                </ul>
-                            </section>
-                        }
-                    })
-                    .collect_view()
-                    .into_any()
-            }
-        }}
-        <Show when=move || !omitted().is_empty()>
-            <p class="muted shopping-omitted">
-                "At home (left off the list): "
-                {move || {
-                    omitted()
-                        .into_iter()
-                        .map(|(key, name)| {
-                            view! {
-                                <button
-                                    type="button"
-                                    class="btn-link"
-                                    title="Put it back on the list"
-                                    on:click=move |_| grocery.update(|g| g.toggle_omitted(&key))
-                                >
-                                    {name}
-                                    " ×"
-                                </button>
-                            }
-                        })
-                        .collect_view()
-                }}
-            </p>
-        </Show>
-    }
 }
 
 #[component]

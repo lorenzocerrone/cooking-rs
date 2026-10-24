@@ -8,6 +8,7 @@ pub fn Nav() -> impl IntoView {
         <nav>
             <A href="/">"Recipes"</A>
             <A href="/planner">"Meal Planner"</A>
+            <A href="/grocery">"Grocery List"</A>
         </nav>
     }
 }

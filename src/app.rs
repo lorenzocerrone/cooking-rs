@@ -4,7 +4,7 @@ use leptos_router::path;
 
 use crate::components::Nav;
 use crate::models::MealPlan;
-use crate::pages::{PlannerPage, RecipeDetailPage, RecipesPage};
+use crate::pages::{GroceryPage, PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::state::{read_hash, write_hash};
 use crate::storage::{self, GroceryState, PersistedState};
 
@@ -55,6 +55,7 @@ pub fn App() -> impl IntoView {
                     <Route path=path!("/") view=RecipesPage />
                     <Route path=path!("/recipe/:id") view=RecipeDetailPage />
                     <Route path=path!("/planner") view=PlannerPage />
+                    <Route path=path!("/grocery") view=GroceryPage />
                 </Routes>
             </main>
         </Router>

@@ -696,6 +696,39 @@ main {
   margin-right: 0.5rem;
 }
 
+.planner-toolbar__grocery {
+  margin-left: auto;
+}
+
+/* ── Grocery extras ──────────────────────────────────────────────────────── */
+.extras {
+  margin-top: 1.5rem;
+}
+
+.extras-list {
+  margin: 0 0 0.5rem;
+  padding-left: 1.1rem;
+}
+
+.extras-list li button {
+  margin-left: 0.4rem;
+}
+
+.extras-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.extras-form input[type="number"] {
+  width: 6rem;
+}
+
+.extras-form input[type="text"] {
+  width: 9rem;
+}
+
 .shopping-controls {
   display: flex;
   flex-wrap: wrap;
