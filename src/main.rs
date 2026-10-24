@@ -9,6 +9,7 @@ mod quantity;
 mod recipes;
 mod shopping;
 mod state;
+mod storage;
 #[cfg(test)]
 mod validate;
 

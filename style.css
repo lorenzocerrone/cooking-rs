@@ -671,6 +671,31 @@ main {
 }
 
 /* ── Shopping list ───────────────────────────────────────────────────────── */
+.shopping-items li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.shopping-items li label {
+  flex: 1;
+  min-width: 0;
+}
+
+.shopping-skip {
+  font-size: 0.8rem;
+  opacity: 0;
+}
+
+.shopping-items li:hover .shopping-skip,
+.shopping-items li:focus-within .shopping-skip {
+  opacity: 1;
+}
+
+.shopping-omitted button {
+  margin-right: 0.5rem;
+}
+
 .shopping-controls {
   display: flex;
   flex-wrap: wrap;

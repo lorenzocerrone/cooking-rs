@@ -9,7 +9,7 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// What kind of thing a unit measures. Quantities only add within a dimension.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Dimension {
     Mass,
     Volume,

@@ -1,9 +1,7 @@
-use std::collections::HashSet;
-
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::BASE_PATH;
+use crate::app::{use_grocery, BASE_PATH};
 use crate::components::{
     IconClose, IconInfo, IconPlus, IconShuffle, Modal, RecipeOverview, RecipePicker,
 };
@@ -11,6 +9,7 @@ use crate::format::{asset_url, format_line_quantity, format_text, format_timing}
 use crate::models::{IngredientCatalog, MealPlan, Recipe, Slot, DAY_NAMES};
 use crate::recipes::load_data;
 use crate::shopping::{aggregate, ShoppingCategory};
+use crate::storage::GroceryState;
 
 /// Weekly meal planner: a responsive grid of day-cards whose state is the shared
 /// meal plan (mirrored into the URL hash by `App`), plus a category-grouped
@@ -24,7 +23,7 @@ pub fn PlannerPage() -> impl IntoView {
 
     view! {
         <h1>"Weekly Meal Planner"</h1>
-        <p class="muted">"Your plan is saved in the page URL — copy it to share."</p>
+        <p class="muted">"Saved on this device as you go — copy the page URL to share your plan."</p>
 
         <Suspense fallback=|| view! { <p class="muted">"Loading recipes…"</p> }>
             {move || {
@@ -62,19 +61,31 @@ fn PlannerGrid(
     let picker_open = RwSignal::new(false);
     let picker_target = RwSignal::new((0usize, Slot::Breakfast));
 
-    // Shopping-list view options (session-only, not encoded in the URL).
-    let hide_to_taste = RwSignal::new(false);
-    let checked = RwSignal::new(HashSet::<String>::new());
+    // Grocery check-offs and view options: shared, persisted per device.
+    let grocery = use_grocery();
 
-    // The list actually shown/exported, after applying the "omit to taste" toggle.
+    // Forget ticks for lines that disappeared or changed amount.
+    Effect::new(move |_| {
+        let lines: Vec<_> = shopping.get().into_iter().flat_map(|c| c.lines).collect();
+        let mut g = grocery.get_untracked();
+        if g.prune_checked(&lines) {
+            grocery.set(g);
+        }
+    });
+
+    // The list actually shown/exported, after the "omit to taste" toggle and the
+    // user's "have at home" omissions.
     let visible = Memo::new(move |_| {
         let mut cats = shopping.get();
-        if hide_to_taste.get() {
+        grocery.with(|g| {
             for cat in cats.iter_mut() {
-                cat.lines.retain(|line| !line.subtotals.is_empty());
+                cat.lines.retain(|line| {
+                    let shown_to_taste = !g.hide_to_taste || !line.subtotals.is_empty();
+                    shown_to_taste && !g.is_omitted(&line.key)
+                });
             }
-            cats.retain(|cat| !cat.lines.is_empty());
-        }
+        });
+        cats.retain(|cat| !cat.lines.is_empty());
         cats
     });
 
@@ -160,13 +171,16 @@ fn PlannerGrid(
             <label>
                 <input
                     type="checkbox"
-                    prop:checked=move || hide_to_taste.get()
-                    on:change=move |ev| hide_to_taste.set(event_target_checked(&ev))
+                    prop:checked=move || grocery.with(|g| g.hide_to_taste)
+                    on:change=move |ev| {
+                        let v = event_target_checked(&ev);
+                        grocery.update(|g| g.hide_to_taste = v);
+                    }
                 />
                 " Omit \"to taste\" items"
             </label>
         </div>
-        <ShoppingList categories=visible checked=checked />
+        <ShoppingList categories=visible grocery=grocery catalog=catalog />
         <textarea
             class="shopping-list"
             prop:value=move || format_text(&visible.get())
@@ -240,8 +254,26 @@ fn fill_random_plan(plan: RwSignal<MealPlan>, recipes: StoredValue<Vec<Recipe>>)
 #[component]
 fn ShoppingList(
     categories: Memo<Vec<ShoppingCategory>>,
-    checked: RwSignal<HashSet<String>>,
+    grocery: RwSignal<GroceryState>,
+    catalog: StoredValue<IngredientCatalog>,
 ) -> impl IntoView {
+    // Names of the ingredients the user marked as "have at home", for restoring.
+    let omitted = move || {
+        grocery.with(|g| {
+            g.omitted
+                .iter()
+                .map(|key| {
+                    let name = catalog.with_value(|c| {
+                        c.get(key)
+                            .map(|i| i.name.clone())
+                            .unwrap_or_else(|| key.clone())
+                    });
+                    (key.clone(), name)
+                })
+                .collect::<Vec<_>>()
+        })
+    };
+
     view! {
         {move || {
             let cats = categories.get();
@@ -258,33 +290,35 @@ fn ShoppingList(
                                         .into_iter()
                                         .map(|line| {
                                             let qty = format_line_quantity(&line);
+                                            let label = format!("{}: {}", line.name, qty);
                                             // Keyed by catalog key: stable across renames.
-                                            let key = line.key.clone();
-                                            let key_class = key.clone();
-                                            let key_input = key.clone();
-                                            let is_checked_class = move || {
-                                                checked.with(|c| c.contains(&key_class))
+                                            let key = StoredValue::new(line.key.clone());
+                                            let is_checked = move || {
+                                                key.with_value(|k| grocery.with(|g| g.is_checked(k)))
                                             };
-                                            let is_checked_input = move || {
-                                                checked.with(|c| c.contains(&key_input))
-                                            };
+                                            let line = StoredValue::new(line);
                                             view! {
-                                                <li class:checked=is_checked_class>
+                                                <li class:checked=is_checked>
                                                     <label>
                                                         <input
                                                             type="checkbox"
-                                                            prop:checked=is_checked_input
+                                                            prop:checked=is_checked
                                                             on:change=move |_| {
-                                                                checked
-                                                                    .update(|c| {
-                                                                        if !c.remove(&key) {
-                                                                            c.insert(key.clone());
-                                                                        }
-                                                                    });
+                                                                line.with_value(|l| grocery.update(|g| g.toggle_checked(l)));
                                                             }
                                                         />
-                                                        {format!("{}: {}", line.name, qty)}
+                                                        {label}
                                                     </label>
+                                                    <button
+                                                        type="button"
+                                                        class="btn-link shopping-skip"
+                                                        title="I have this at home — leave it off the list"
+                                                        on:click=move |_| {
+                                                            key.with_value(|k| grocery.update(|g| g.toggle_omitted(k)));
+                                                        }
+                                                    >
+                                                        "have it"
+                                                    </button>
                                                 </li>
                                             }
                                         })
@@ -297,6 +331,29 @@ fn ShoppingList(
                     .into_any()
             }
         }}
+        <Show when=move || !omitted().is_empty()>
+            <p class="muted shopping-omitted">
+                "At home (left off the list): "
+                {move || {
+                    omitted()
+                        .into_iter()
+                        .map(|(key, name)| {
+                            view! {
+                                <button
+                                    type="button"
+                                    class="btn-link"
+                                    title="Put it back on the list"
+                                    on:click=move |_| grocery.update(|g| g.toggle_omitted(&key))
+                                >
+                                    {name}
+                                    " ×"
+                                </button>
+                            }
+                        })
+                        .collect_view()
+                }}
+            </p>
+        </Show>
     }
 }
 

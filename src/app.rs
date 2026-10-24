@@ -6,6 +6,7 @@ use crate::components::Nav;
 use crate::models::MealPlan;
 use crate::pages::{PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::state::{read_hash, write_hash};
+use crate::storage::{self, GroceryState, PersistedState};
 
 /// Router base path. Empty for local dev (served at `/`); the deploy workflow sets
 /// `APP_BASE_PATH=/cooking-rs` so routes/links resolve under the GitHub Pages subpath.
@@ -18,15 +19,26 @@ pub const BASE_PATH: &str = match option_env!("APP_BASE_PATH") {
 /// Root component: the nav shell plus client-side routing.
 #[component]
 pub fn App() -> impl IntoView {
-    // The meal plan is the one piece of shared, app-wide state. It lives here so
-    // any page can read or update it (the planner edits it; recipe pages add to
-    // it), and it is mirrored into the URL hash for sharing. Seed from the hash so
-    // shared links restore regardless of which route is opened first.
-    let plan = RwSignal::new(read_hash().unwrap_or_default());
+    // Two pieces of shared, app-wide state, provided here so any page can read or
+    // update them:
+    // - the meal plan (the planner edits it; recipe pages add to it), which is
+    //   mirrored into the URL hash for sharing and persisted locally;
+    // - the grocery check-off state, persisted locally only.
+    // A plan in the hash (a shared link) wins over the stored one on startup.
+    let initial = storage::resolve_initial(read_hash(), storage::load());
+    let plan = RwSignal::new(initial.plan);
+    let grocery = RwSignal::new(initial.grocery);
     provide_context(plan);
+    provide_context(grocery);
 
-    // Keep the URL hash in sync on every change. Skip the initial run when the
-    // plan is empty so we don't stamp an empty `#plan=` onto plain page loads.
+    // Persist on every change (including the initial merge above).
+    Effect::new(move |_| {
+        storage::save(&PersistedState::new(plan.get(), grocery.get()));
+    });
+
+    // Keep the URL hash in sync so the address bar is always a shareable snapshot.
+    // Skip the initial run when the plan is empty so plain page loads don't get an
+    // empty `#plan=` stamped on them.
     Effect::new(move |prev: Option<()>| {
         let current = plan.get();
         if prev.is_none() && current == MealPlan::default() {
@@ -47,4 +59,9 @@ pub fn App() -> impl IntoView {
             </main>
         </Router>
     }
+}
+
+/// Convenience for pages: the shared grocery state.
+pub fn use_grocery() -> RwSignal<GroceryState> {
+    expect_context::<RwSignal<GroceryState>>()
 }
