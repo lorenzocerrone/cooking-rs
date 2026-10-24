@@ -1,9 +1,11 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
-use web_sys::TouchEvent;
+use std::time::Duration;
+
+use web_sys::PointerEvent;
 
 use crate::app::{href, notify, use_app_data, use_grocery, use_plan};
-use crate::components::IconClose;
+use crate::components::{IconClose, Modal};
 use crate::extras::{parse_extra, suggest, to_extra};
 use crate::format::{format_ingredient_amount, format_line_quantity, format_text};
 use crate::models::{Extra, IngredientCatalog, MealPlan, Recipe};
@@ -80,7 +82,7 @@ fn GroceryList(
                         1 => "1 meal".to_string(),
                         n => format!("{n} meals"),
                     };
-                    format!("{} of {t} left to buy · {meals} this week", remaining())
+                    format!("{} of {t} left to buy · {meals} · tap to tick, hold for more", remaining())
                 }
             }}
         </p>
@@ -97,7 +99,7 @@ fn GroceryList(
                 }
             }
         >
-            <Aisles categories=visible grocery=grocery />
+            <Aisles categories=visible grocery=grocery recipes=recipes />
         </Show>
 
         <AtHome grocery=grocery catalog=catalog />
@@ -121,7 +123,12 @@ fn GroceryList(
 fn Aisles(
     categories: Memo<Vec<ShoppingCategory>>,
     grocery: RwSignal<GroceryState>,
+    recipes: StoredValue<Vec<Recipe>>,
 ) -> impl IntoView {
+    // One sheet for every row, repointed before opening (hold a row to open it).
+    let sheet_open = RwSignal::new(false);
+    let sheet_line = RwSignal::new(None::<ShoppingLine>);
+
     view! {
         {move || {
             categories
@@ -145,80 +152,160 @@ fn Aisles(
                             </h2>
                             {lines
                                 .into_iter()
-                                .map(|(checked, line)| view! { <Row line=line checked=checked grocery=grocery /> })
+                                .map(|(checked, line)| {
+                                    view! {
+                                        <Row
+                                            line=line
+                                            checked=checked
+                                            grocery=grocery
+                                            sheet_line=sheet_line
+                                            sheet_open=sheet_open
+                                        />
+                                    }
+                                })
                                 .collect_view()}
                         </section>
                     }
                 })
                 .collect_view()
         }}
+        <RowSheet open=sheet_open line=sheet_line grocery=grocery recipes=recipes />
     }
 }
 
-/// One shopping line. Tap toggles the tick. Swiping left (touch) reveals "Have
-/// it"; on pointer devices the same button shows on hover.
+/// How long a press must last to count as "hold" rather than a tap.
+const HOLD_MS: u64 = 450;
+
+/// One shopping line. A tap toggles the tick; holding the row (finger or mouse)
+/// opens its sheet. Pointer events cover both, and a move of more than a few
+/// pixels (a scroll) cancels the hold.
 #[component]
-fn Row(line: ShoppingLine, checked: bool, grocery: RwSignal<GroceryState>) -> impl IntoView {
+fn Row(
+    line: ShoppingLine,
+    checked: bool,
+    grocery: RwSignal<GroceryState>,
+    sheet_line: RwSignal<Option<ShoppingLine>>,
+    sheet_open: RwSignal<bool>,
+) -> impl IntoView {
     let qty = format_line_quantity(&line);
     let name = line.name.clone();
-    let key = StoredValue::new(line.key.clone());
     let line = StoredValue::new(line);
-    let revealed = RwSignal::new(false);
-    let touch_x = StoredValue::new(None::<i32>);
+    let hold = StoredValue::new(None::<(TimeoutHandle, i32, i32)>);
+    // Set when a hold fired, so the click that follows the release is ignored.
+    let held = StoredValue::new(false);
 
-    let toggle = move |_| {
-        if revealed.get_untracked() {
-            revealed.set(false);
-        } else {
-            line.with_value(|l| grocery.update(|g| g.toggle_checked(l)));
+    let cancel_hold = move || {
+        if let Some((handle, _, _)) = hold.get_value() {
+            handle.clear();
+            hold.set_value(None);
         }
     };
-    let have_it = move |ev: leptos::ev::MouseEvent| {
-        ev.stop_propagation();
-        key.with_value(|k| grocery.update(|g| g.toggle_omitted(k)));
-    };
-    let on_start = move |ev: TouchEvent| {
-        touch_x.set_value(ev.touches().get(0).map(|t| t.client_x()));
-    };
-    let on_end = move |ev: TouchEvent| {
-        let (Some(start), Some(end)) = (
-            touch_x.get_value(),
-            ev.changed_touches().get(0).map(|t| t.client_x()),
-        ) else {
+    let on_down = move |ev: PointerEvent| {
+        if ev.button() != 0 {
             return;
-        };
-        touch_x.set_value(None);
-        let dx = end - start;
-        if dx < -50 {
-            revealed.set(true);
-        } else if dx > 30 {
-            revealed.set(false);
         }
+        cancel_hold();
+        held.set_value(false);
+        let open = move || {
+            hold.set_value(None);
+            held.set_value(true);
+            sheet_line.set(Some(line.get_value()));
+            sheet_open.set(true);
+        };
+        if let Ok(handle) = set_timeout_with_handle(open, Duration::from_millis(HOLD_MS)) {
+            hold.set_value(Some((handle, ev.client_x(), ev.client_y())));
+        }
+    };
+    let on_move = move |ev: PointerEvent| {
+        if let Some((_, x, y)) = hold.get_value() {
+            if (ev.client_x() - x).abs() > 8 || (ev.client_y() - y).abs() > 8 {
+                cancel_hold();
+            }
+        }
+    };
+    let on_up = move |_| cancel_hold();
+    let toggle = move |_| {
+        if held.get_value() {
+            held.set_value(false);
+            return;
+        }
+        line.with_value(|l| grocery.update(|g| g.toggle_checked(l)));
     };
 
     view! {
-        <div class="row" class:row--checked=checked class:row--revealed=move || revealed.get()>
-            <button
-                type="button"
-                class="row__main"
-                aria-pressed=checked.to_string()
-                on:click=toggle
-                on:touchstart=on_start
-                on:touchend=on_end
-            >
-                <span class="row__box" aria-hidden="true"></span>
-                <span class="row__name">{name}</span>
-                <span class="row__qty mono">{qty}</span>
-            </button>
-            <button
-                type="button"
-                class="row__have"
-                title="I have this at home: leave it off the list"
-                on:click=have_it
-            >
-                "Have it"
-            </button>
-        </div>
+        <button
+            type="button"
+            class="row"
+            class:row--checked=checked
+            aria-pressed=checked.to_string()
+            on:click=toggle
+            on:pointerdown=on_down
+            on:pointermove=on_move
+            on:pointerup=on_up
+            on:pointercancel=on_up
+            on:pointerleave=on_up
+            on:contextmenu=|ev| ev.prevent_default()
+        >
+            <span class="row__box" aria-hidden="true"></span>
+            <span class="row__name">{name}</span>
+            <span class="row__qty mono">{qty}</span>
+        </button>
+    }
+}
+
+/// The sheet behind a held row: what it is for, and "I have it at home".
+#[component]
+fn RowSheet(
+    open: RwSignal<bool>,
+    line: RwSignal<Option<ShoppingLine>>,
+    grocery: RwSignal<GroceryState>,
+    recipes: StoredValue<Vec<Recipe>>,
+) -> impl IntoView {
+    let title = Signal::derive(move || {
+        line.with(|l| l.as_ref().map(|l| l.name.clone()).unwrap_or_default())
+    });
+    let have_it = move |_| {
+        if let Some(key) = line.with_untracked(|l| l.as_ref().map(|l| l.key.clone())) {
+            grocery.update(|g| g.toggle_omitted(&key));
+            notify("Left off the list");
+        }
+        open.set(false);
+    };
+
+    view! {
+        <Modal open=open title=title>
+            {move || {
+                line.get()
+                    .map(|l| {
+                        let qty = format_line_quantity(&l);
+                        let needed_for: Vec<String> = recipes.with_value(|rs| {
+                            l.sources
+                                .iter()
+                                .filter_map(|id| rs.iter().find(|r| &r.id == id).map(|r| r.title.clone()))
+                                .collect()
+                        });
+                        let source_text = if needed_for.is_empty() {
+                            "Added as an extra".to_string()
+                        } else {
+                            format!("Needed for {}", needed_for.join(", "))
+                        };
+                        view! {
+                            <div class="row-sheet">
+                                <p class="mono muted">{qty}</p>
+                                <p class="row-sheet__for">{source_text}</p>
+                                <div class="meal-sheet__acts">
+                                    <button type="button" class="btn" on:click=have_it>
+                                        "I have it at home"
+                                    </button>
+                                    <button type="button" class="btn btn--quiet" on:click=move |_| open.set(false)>
+                                        "Close"
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    })
+            }}
+        </Modal>
     }
 }
 

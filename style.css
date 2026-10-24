@@ -904,26 +904,17 @@ h1 {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr 96px;
-  width: calc(100% + 96px);
-  border-bottom: 1px solid var(--rule-soft);
-  overflow: hidden;
-  transition: transform 0.2s ease;
-}
-
-.row--revealed {
-  transform: translateX(-96px);
-}
-
-.row__main {
-  display: grid;
   grid-template-columns: 24px 1fr auto;
   align-items: center;
   gap: 10px;
   width: 100%;
   padding: 11px 2px;
+  border-bottom: 1px solid var(--rule-soft);
   font-size: 16px;
   touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .row__box {
@@ -944,7 +935,7 @@ h1 {
   white-space: nowrap;
 }
 
-.row--checked .row__main {
+.row--checked {
   color: var(--faint);
 }
 
@@ -961,54 +952,21 @@ h1 {
   content: "✓";
 }
 
-.row__have {
-  display: grid;
-  place-items: center;
-  background: var(--muted);
-  color: var(--panel);
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-/* Pointer devices: no swipe needed, the action shows on hover over the row's end. */
 @media (hover: hover) and (pointer: fine) {
-  .row {
-    position: relative;
-    width: 100%;
-    grid-template-columns: 1fr;
-  }
-
-  .row--revealed {
-    transform: none;
-  }
-
-  .row__have {
-    visibility: hidden;
-    position: absolute;
-    right: 2px;
-    top: 50%;
-    transform: translateY(-50%);
-    padding: 5px 9px;
-    border-radius: var(--radius);
-    background: var(--panel);
-    color: var(--muted);
-    border: 1px solid var(--rule-mid);
-  }
-
-  .row:hover .row__qty {
-    visibility: hidden;
-  }
-
-  .row:hover .row__have,
-  .row:focus-within .row__have {
-    visibility: visible;
-  }
-
   .row:hover {
     background: var(--inset);
   }
+}
+
+.row-sheet {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.row-sheet__for {
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .at-home {

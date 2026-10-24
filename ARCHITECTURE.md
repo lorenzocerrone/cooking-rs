@@ -160,9 +160,9 @@ src/
                           tappable steps (not persisted), AddToWeek.
     planner_page.rs       "This week": Share button, shared-plan banner, 7 day cards (meal
                           rows + "Add a meal"), meal sheet (servings, view, remove), clear.
-    grocery_page.rs       Aisles with tap-to-tick rows (ticked sink), swipe/hover "Have it",
-                          at-home chips, free-text extras with suggestions, to-taste toggle,
-                          copy.
+    grocery_page.rs       Aisles with tap-to-tick rows (ticked sink); holding a row opens its
+                          sheet ("needed for …", "I have it at home"); at-home chips,
+                          free-text extras with suggestions, to-taste toggle, copy.
 ```
 
 ### Key design boundaries
@@ -283,7 +283,7 @@ every recipe image exists on disk.
 - **Phase 6 — UX pass (phone first).** Parchment/sienna look in the family of `panetti`;
   bottom tab bar with grocery badge; compact recipe list; recipe page with servings stepper
   and tappable steps; days as meal lists with sheets for picking and editing; grocery rows
-  with tap-to-tick and swipe "Have it", free-text extras with catalog suggestions; share
+  with tap-to-tick and hold-for-options, free-text extras with catalog suggestions; share
   button + shared-plan preview banner; dark mode.
 
 ### Next
