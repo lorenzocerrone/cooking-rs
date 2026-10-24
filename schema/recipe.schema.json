@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/lorenzocerrone/cooking-rs/schema/recipe.schema.json",
+  "title": "cooking-rs recipe",
+  "description": "One recipe file under recipes/. Validated for real by `cargo test` (src/validate.rs); this schema is for editor autocomplete.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "title", "servings", "ingredients", "steps"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "Must equal the file name without .json." },
+    "title": { "type": "string", "minLength": 1 },
+    "servings": { "type": "integer", "minimum": 1 },
+    "description": { "type": "string" },
+    "cuisine": { "type": "string" },
+    "tags": { "type": "array", "items": { "type": "string" } },
+    "prep_time": { "type": "integer", "minimum": 0, "description": "Minutes." },
+    "cook_time": { "type": "integer", "minimum": 0, "description": "Minutes." },
+    "image": { "type": "string", "description": "Path relative to the repo root, e.g. images/<id>.svg. Must exist." },
+    "ingredients": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ingredient"],
+        "properties": {
+          "ingredient": { "type": "string", "description": "Key into ingredients.json." },
+          "amount": { "type": "number", "exclusiveMinimum": 0, "description": "Omit for \"to taste\"." },
+          "unit": {
+            "type": "string",
+            "description": "g, kg, ml, l, tsp, tbsp, cup, pcs — or the ingredient's piece label from the catalog (clove, can…). Omit to use the catalog's shopping unit."
+          },
+          "note": { "type": "string", "description": "Preparation note, e.g. \"finely chopped\"." },
+          "optional": { "type": "boolean", "default": false }
+        }
+      }
+    },
+    "steps": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+  }
+}

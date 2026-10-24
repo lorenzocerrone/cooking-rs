@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/lorenzocerrone/cooking-rs/schema/ingredients.schema.json",
+  "title": "cooking-rs ingredient catalog",
+  "description": "ingredients.json: key → catalog entry. Validated for real by `cargo test` (src/validate.rs); this schema is for editor autocomplete.",
+  "type": "object",
+  "propertyNames": { "pattern": "^[a-z0-9_]+$" },
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name", "unit", "category"],
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "unit": {
+        "type": "string",
+        "enum": ["g", "ml", "pcs"],
+        "description": "The shopping unit: how the ingredient is bought and summed. Recipes may use any convertible unit."
+      },
+      "category": { "type": "string", "minLength": 1, "description": "Shopping aisle, e.g. Produce, Pantry." },
+      "count": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "How the ingredient is counted in pieces.",
+        "properties": {
+          "label": { "type": "string", "description": "Name of one piece (clove, can, slice). Recipes may use it as a unit." },
+          "plural": { "type": "string", "description": "Plural of label if not label + \"s\"." },
+          "per_piece": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "How much of the shopping unit one piece is (150 for a 150 g onion). For a pcs-shopped ingredient: grams per piece."
+          }
+        }
+      }
+    }
+  }
+}

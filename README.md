@@ -1,23 +1,27 @@
 # cooking-rs
 
-A small, statically-buildable web app for visualizing cooking recipes and
-building a shareable weekly meal plan. Written in Rust with
+A small, statically-buildable web app for organizing recipes, planning a week of
+meals, and getting the grocery list for it. Written in Rust with
 [Leptos](https://leptos.dev) (CSR) and built with [Trunk](https://trunkrs.dev).
 
-No backend, no database — recipes are plain JSON files embedded at compile time.
+No backend, no database — recipes are plain JSON files embedded at compile time;
+your plan is saved in the browser and shareable as a link.
 
 ## Features
 
-- **Recipes page** — lists all recipes from `recipes/*.json`, each with a thumbnail
-  image, and supports **search plus cuisine/tag filtering**.
-- **Per-recipe images** — bundled `images/<id>.svg` assets, resolved through a
-  base-path-aware helper so they work under a subpath deploy.
-- **Nutrition** — per-recipe and per-meal macro summaries, computed from the
-  ingredient catalog when a recipe doesn't specify its own macros.
-- **Meal planner** — a 7-day × 3-slot (breakfast/lunch/dinner) grid; export the
-  selection as a plain-text shopping list.
-- **Shareable state** — the meal plan is encoded into the URL hash fragment, so
-  copying the URL shares the plan.
+- **Recipes** — every `recipes/*.json` file, with a thumbnail, search, and
+  cuisine/tag filters; a quick-view dialog and a full detail page with steps.
+- **Meal planner** — a 7-day × 3-slot (breakfast/lunch/dinner) grid with a
+  searchable recipe picker, per-meal servings, "fill randomly", and "clear week".
+- **Grocery list** — everything the week needs, converted into each ingredient's
+  shopping unit and summed ("1 onion" + "100 g onion" → 250 g; "3 cloves" → 12 g;
+  "2 tbsp" → 30 ml; "2 cans"), grouped by aisle. Tick items off as you shop, mark
+  things you have at home, add extras that aren't in a recipe, copy as text.
+- **Saved and shareable** — the plan and your grocery ticks persist in
+  `localStorage`; the plan is also mirrored into the URL hash, so copying the
+  address shares it (a shared link takes precedence when opened).
+- **Validated data** — `cargo test` checks every recipe file parses, ids match
+  file names, ingredients exist, units convert, and images are present.
 - **Installable PWA** — `manifest.webmanifest` + service worker (`sw.js`) make the
   app installable and offline-capable.
 
@@ -31,7 +35,9 @@ cargo install trunk
 ## Develop
 
 ```sh
-trunk serve --open
+trunk serve --open   # dev server with live reload
+cargo test           # unit tests + data validation (host)
+cargo clippy --all-targets -- -D warnings
 ```
 
 ## Build (static site)
@@ -44,49 +50,75 @@ The deployable static site is written to `dist/`.
 
 ## Data model
 
-Ingredients are defined once in a central catalog (`ingredients.json`), keyed by
-id, each with a single canonical unit and a shopping category:
+### Ingredient catalog (`ingredients.json`)
+
+One entry per ingredient, keyed by id. `unit` is the **shopping unit** — how you
+buy it and how the grocery list sums it — and must be `g`, `ml` or `pcs`. An
+optional `count` says how the ingredient is counted in pieces so recipes can use
+pieces and the list can still add things up:
 
 ```json
 {
-  "spaghetti": { "name": "Spaghetti", "unit": "g", "category": "Pasta & Grains" },
-  "egg":       { "name": "Egg",       "unit": "unit", "category": "Dairy & Eggs" }
+  "spaghetti": { "name": "Spaghetti", "unit": "g",   "category": "Pasta & Grains" },
+  "egg":       { "name": "Egg",       "unit": "pcs", "category": "Dairy & Eggs" },
+  "onion":     { "name": "Onion",     "unit": "g",   "category": "Produce",
+                 "count": { "per_piece": 150 } },
+  "garlic":    { "name": "Garlic",    "unit": "g",   "category": "Produce",
+                 "count": { "label": "clove", "per_piece": 4 } },
+  "chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "pcs", "category": "Pantry",
+                 "count": { "label": "can", "per_piece": 400 } }
 }
 ```
 
-Recipes (`recipes/*.json`) reference catalog ingredients **by key** and give only
-a number. Because every ingredient has one fixed unit, the shopping list sums
-amounts exactly. Omit `amount` to mean "to taste":
+`per_piece` is how much of the shopping unit one piece is. For a `pcs`-shopped
+ingredient it is the mass of one piece in grams, so "400 g chopped tomatoes"
+becomes one can.
+
+### Recipes (`recipes/*.json`)
+
+Recipes reference catalog ingredients **by key**. `unit` may be any of
+`g kg ml l tsp tbsp cup pcs` or the ingredient's piece label; omit it to use the
+shopping unit. Omit `amount` for "to taste".
 
 ```json
 {
-  "id": "carbonara",
-  "title": "Spaghetti Carbonara",
-  "servings": 2,
+  "id": "lentil_dal",
+  "title": "Lentil Dal",
+  "servings": 4,
+  "cuisine": "Indian",
+  "tags": ["dinner", "vegetarian"],
+  "prep_time": 10,
+  "cook_time": 30,
+  "image": "images/lentil_dal.svg",
   "ingredients": [
-    { "ingredient": "spaghetti", "amount": 200 },
-    { "ingredient": "egg", "amount": 4 },
-    { "ingredient": "black_pepper" }
+    { "ingredient": "lentils", "amount": 300 },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
+    { "ingredient": "chives", "amount": 5, "optional": true },
+    { "ingredient": "salt" }
   ],
   "steps": ["…"]
 }
 ```
 
+JSON Schemas for both files live in `schema/` and are wired up for VS Code in
+`.vscode/settings.json` (autocomplete and inline errors while editing).
+
 ### Adding a recipe
 
-1. If a recipe uses an ingredient not yet in `ingredients.json`, add it there first
-   (pick its natural unit and category).
-2. Add a `recipes/<name>.json` file referencing ingredients by key.
-3. Rebuild. `cargo test` validates that every referenced key exists in the catalog.
-
-(Both files are embedded into the wasm binary at compile time — see `src/recipes.rs`.)
+1. If it uses an ingredient not yet in `ingredients.json`, add it there first:
+   pick the shopping unit, the aisle, and a `count` if recipes will use pieces.
+2. Add `recipes/<id>.json` with `"id": "<id>"` and an image at `images/<id>.svg`.
+3. Run `cargo test`. The validation suite lists every problem by file and rule.
 
 ## Deploy (GitHub Pages)
 
 Pushing to `main` runs `.github/workflows/deploy.yml`, which builds with the
 correct base path and publishes `dist/` to GitHub Pages.
 
-One-time setup: in the repo, **Settings → Pages → Source → GitHub Actions**.
+One-time setup: in the repo, **Settings → Pages → Build and deployment → Source:
+GitHub Actions** (without this the deploy job fails).
 
 The base path assumes a project page at `https://<user>.github.io/cooking-rs/`.
 If you rename the repo or use a user/root or custom-domain page, update **both**
@@ -98,17 +130,21 @@ If you rename the repo or use a user/root or custom-domain page, update **both**
 ingredients.json    ingredient catalog (embedded at build time)
 recipes/            recipe data (embedded at build time)
 images/             per-recipe images (copied into dist/ via index.html)
+schema/             JSON Schemas for the two data files (editor support)
+build.rs            re-runs the build when recipes/ or the catalog change
 src/
   main.rs           entry point: mounts the app
-  app.rs            router (base-path aware) + nav shell
-  models.rs         Recipe / RecipeIngredient / IngredientCatalog / MealPlan
-  recipes.rs        data loading boundary (embed today, fetch-ready) + validation tests
-  filter.rs         recipe search + cuisine/tag filtering
-  nutrition.rs      recipe/meal macro computation from the ingredient catalog
-  format.rs         display helpers (timing, macros, ingredient lines, asset_url)
-  shopping.rs       meal plan -> summed, category-grouped shopping list
-  state.rs          meal-plan <-> URL-hash encoding
+  app.rs            router + nav shell; owns the shared plan + grocery state
+  models.rs         Recipe / RecipeIngredient / CatalogIngredient / MealPlan
+  quantity.rs       units, dimensions, piece specs, conversions (pure)
+  recipes.rs        data loading boundary (embed today, fetch-ready)
+  validate.rs       data validation tests (cargo test)
+  filter.rs         recipe search + cuisine/tag filtering (pure)
+  shopping.rs       meal plan -> converted, summed, aisle-grouped grocery lines (pure)
+  format.rs         display strings: quantities, rounding, text export (pure)
+  state.rs          meal plan <-> URL hash (share links)
+  storage.rs        meal plan + grocery ticks <-> localStorage
   pwa.rs            service-worker registration
-  components/       shared UI (nav, recipe overview, add-to-planner, macro summary, modal)
-  pages/            recipes, recipe detail, planner, and ingredients pages
+  components/       nav, modal, recipe overview, recipe picker, add-to-planner, icons
+  pages/            recipes, recipe detail, planner, grocery
 ```

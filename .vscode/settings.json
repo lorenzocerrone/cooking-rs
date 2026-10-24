@@ -1,0 +1,6 @@
+{
+  "json.schemas": [
+    { "fileMatch": ["/recipes/*.json"], "url": "./schema/recipe.schema.json" },
+    { "fileMatch": ["/ingredients.json"], "url": "./schema/ingredients.schema.json" }
+  ]
+}
