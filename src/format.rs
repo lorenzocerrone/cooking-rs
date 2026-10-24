@@ -25,7 +25,17 @@ pub fn format_quantity(amount: f64, unit: Unit, count: Option<&CountSpec>) -> St
 /// The amount column for one recipe ingredient, resolved against the catalog.
 /// `None` amount renders "to taste".
 pub fn format_ingredient_amount(item: &RecipeIngredient, catalog: &IngredientCatalog) -> String {
-    let Some(amount) = item.amount else {
+    format_ingredient_amount_scaled(item, catalog, 1.0)
+}
+
+/// [`format_ingredient_amount`] with the amount multiplied by `factor` (the
+/// recipe page's servings stepper). "To taste" never scales.
+pub fn format_ingredient_amount_scaled(
+    item: &RecipeIngredient,
+    catalog: &IngredientCatalog,
+    factor: f64,
+) -> String {
+    let Some(amount) = item.amount.map(|a| a * factor) else {
         return "to taste".to_string();
     };
     let info = catalog.get(&item.ingredient);
@@ -38,36 +48,6 @@ pub fn format_ingredient_amount(item: &RecipeIngredient, catalog: &IngredientCat
             .unwrap_or(Unit::Piece),
     };
     format_quantity(amount, unit, info.and_then(|i| i.count.as_ref()))
-}
-
-/// Condensed one-line ingredient preview for cards: the first `max` ingredient
-/// names joined by ", ", with a "+N more" suffix when there are extras.
-pub fn ingredient_summary(
-    items: &[RecipeIngredient],
-    catalog: &IngredientCatalog,
-    max: usize,
-) -> String {
-    let names: Vec<&str> = items
-        .iter()
-        .map(|i| {
-            catalog
-                .get(&i.ingredient)
-                .map(|info| info.name.as_str())
-                .unwrap_or("?")
-        })
-        .collect();
-    let shown = names
-        .iter()
-        .take(max)
-        .copied()
-        .collect::<Vec<_>>()
-        .join(", ");
-    let extra = names.len().saturating_sub(max);
-    if extra > 0 {
-        format!("{shown} +{extra} more")
-    } else {
-        shown
-    }
 }
 
 /// One summed sub-total for the grocery list, in shop-friendly units:
@@ -93,6 +73,9 @@ pub fn format_subtotal(subtotal: &Subtotal, count: Option<&CountSpec>, mixed: bo
 /// The quantity text for a whole shopping line: sub-totals joined with " + ",
 /// then "to taste" if any contribution was amount-less, then "(optional)".
 pub fn format_line_quantity(line: &ShoppingLine) -> String {
+    if !line.custom_quantities.is_empty() {
+        return line.custom_quantities.join(" + ");
+    }
     let mixed = line.subtotals.len() > 1;
     let mut parts: Vec<String> = line
         .subtotals
@@ -120,11 +103,12 @@ pub fn format_text(categories: &[ShoppingCategory]) -> String {
         out.push_str(&cat.name);
         out.push('\n');
         for line in &cat.lines {
-            out.push_str(&format!(
-                "- {}: {}\n",
-                line.name,
-                format_line_quantity(line)
-            ));
+            let qty = format_line_quantity(line);
+            if qty.is_empty() {
+                out.push_str(&format!("- {}\n", line.name));
+            } else {
+                out.push_str(&format!("- {}: {qty}\n", line.name));
+            }
         }
         out.push('\n');
     }
@@ -139,7 +123,12 @@ pub fn total_time(recipe: &Recipe) -> Option<u32> {
     }
 }
 
-/// A " · 10 min prep · 15 min cook" suffix, omitting absent parts.
+/// Total time as a short label ("40 min"), if any time is set.
+pub fn format_total_time(recipe: &Recipe) -> Option<String> {
+    total_time(recipe).map(|m| format!("{m} min"))
+}
+
+/// "10 min prep + 15 min cook", omitting absent parts; empty when neither is set.
 pub fn format_timing(recipe: &Recipe) -> String {
     let mut parts = Vec::new();
     if let Some(p) = recipe.prep_time {
@@ -148,21 +137,7 @@ pub fn format_timing(recipe: &Recipe) -> String {
     if let Some(c) = recipe.cook_time {
         parts.push(format!("{c} min cook"));
     }
-    if parts.is_empty() {
-        String::new()
-    } else {
-        format!(" · {}", parts.join(" · "))
-    }
-}
-
-/// Resolve a (possibly relative) asset path against the app base path so it works
-/// under a subpath deploy (e.g. `/cooking-rs/`). Absolute URLs are returned as-is.
-pub fn asset_url(base: &str, path: &str) -> String {
-    if path.starts_with("http://") || path.starts_with("https://") || path.starts_with('/') {
-        path.to_string()
-    } else {
-        format!("{base}/{path}")
-    }
+    parts.join(" + ")
 }
 
 /// Mass/volume with automatic step-up to the large unit at 1000.
@@ -246,6 +221,7 @@ mod tests {
             to_taste: false,
             optional: false,
             sources: vec![],
+            custom_quantities: vec![],
         }
     }
 
@@ -346,63 +322,57 @@ mod tests {
     }
 
     #[test]
+    fn custom_lines_show_their_text_as_typed() {
+        let mut l = line(vec![], None);
+        l.custom_quantities = vec!["1 loaf".into(), "2 rolls".into()];
+        assert_eq!(format_line_quantity(&l), "1 loaf + 2 rolls");
+        let bare = line(vec![], None);
+        assert_eq!(format_line_quantity(&bare), "");
+    }
+
+    #[test]
+    fn scaled_amounts_follow_the_servings_factor() {
+        let cat = catalog();
+        let garlic = RecipeIngredient {
+            ingredient: "garlic".into(),
+            amount: Some(3.0),
+            unit: Some("cloves".into()),
+            note: None,
+            optional: false,
+        };
+        assert_eq!(
+            format_ingredient_amount_scaled(&garlic, &cat, 1.5),
+            "4.5 cloves"
+        );
+        assert_eq!(
+            format_ingredient_amount_scaled(&garlic, &cat, 1.0 / 3.0),
+            "1 clove"
+        );
+        let salt = RecipeIngredient::new("salt".into(), None);
+        assert_eq!(
+            format_ingredient_amount_scaled(&salt, &cat, 2.0),
+            "to taste"
+        );
+    }
+
+    #[test]
     fn text_export_lists_categories_and_lines() {
         assert_eq!(format_text(&[]), "No meals selected yet.");
-        let cats = vec![ShoppingCategory {
-            name: "Produce".into(),
-            lines: vec![line(vec![sub(Dimension::Mass, 1500.0)], None)],
-        }];
-        assert_eq!(format_text(&cats), "Produce\n- Thing: 1.5 kg");
-    }
-
-    #[test]
-    fn asset_url_resolves_relative_and_absolute() {
-        // Relative paths get the base prefix (works on root and subpath deploys).
-        assert_eq!(asset_url("", "images/x.svg"), "/images/x.svg");
+        let mut bare = line(vec![], None);
+        bare.name = "Candles".into();
+        let cats = vec![
+            ShoppingCategory {
+                name: "Produce".into(),
+                lines: vec![line(vec![sub(Dimension::Mass, 1500.0)], None)],
+            },
+            ShoppingCategory {
+                name: "Other".into(),
+                lines: vec![bare],
+            },
+        ];
         assert_eq!(
-            asset_url("/cooking-rs", "images/x.svg"),
-            "/cooking-rs/images/x.svg"
-        );
-        // Already-absolute paths/URLs are left untouched.
-        assert_eq!(asset_url("/cooking-rs", "/images/x.svg"), "/images/x.svg");
-        assert_eq!(
-            asset_url("/cooking-rs", "https://ex.com/x.jpg"),
-            "https://ex.com/x.jpg"
-        );
-    }
-
-    #[test]
-    fn ingredient_summary_condenses_with_overflow() {
-        let mut map = HashMap::new();
-        for key in ["a", "b", "c", "d", "e", "f"] {
-            map.insert(
-                key.to_string(),
-                CatalogIngredient {
-                    name: key.to_uppercase(),
-                    unit: Unit::G,
-                    category: "Test".into(),
-                    count: None,
-                },
-            );
-        }
-        let catalog = IngredientCatalog(map);
-        let items = |keys: &[&str]| {
-            keys.iter()
-                .map(|k| RecipeIngredient::new((*k).into(), None))
-                .collect::<Vec<_>>()
-        };
-
-        // More than `max` ingredients → first `max` names + "+N more".
-        assert_eq!(
-            ingredient_summary(&items(&["a", "b", "c", "d", "e", "f"]), &catalog, 3),
-            "A, B, C +3 more"
-        );
-        // At or below `max` → no suffix.
-        assert_eq!(ingredient_summary(&items(&["a", "b"]), &catalog, 3), "A, B");
-        // Unknown keys render as "?".
-        assert_eq!(
-            ingredient_summary(&items(&["a", "zzz"]), &catalog, 3),
-            "A, ?"
+            format_text(&cats),
+            "Produce\n- Thing: 1.5 kg\n\nOther\n- Candles"
         );
     }
 
@@ -422,11 +392,13 @@ mod tests {
             image: None,
         };
         assert_eq!(total_time(&r), Some(25));
-        assert_eq!(format_timing(&r), " · 10 min prep · 15 min cook");
+        assert_eq!(format_total_time(&r), Some("25 min".into()));
+        assert_eq!(format_timing(&r), "10 min prep + 15 min cook");
         r.cook_time = None;
-        assert_eq!(format_timing(&r), " · 10 min prep");
+        assert_eq!(format_timing(&r), "10 min prep");
         r.prep_time = None;
         assert_eq!(total_time(&r), None);
+        assert_eq!(format_total_time(&r), None);
         assert_eq!(format_timing(&r), "");
     }
 }

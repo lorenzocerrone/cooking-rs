@@ -69,7 +69,6 @@ pub struct RecipeIngredient {
 
 impl RecipeIngredient {
     /// An ingredient in its catalog unit with no note.
-    #[cfg(test)]
     pub fn new(ingredient: String, amount: Option<f64>) -> Self {
         Self {
             ingredient,
@@ -107,27 +106,7 @@ impl IngredientCatalog {
     }
 }
 
-/// The three meal slots in a day.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Slot {
-    Breakfast,
-    Lunch,
-    Dinner,
-}
-
-impl Slot {
-    pub const ALL: [Slot; 3] = [Slot::Breakfast, Slot::Lunch, Slot::Dinner];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Slot::Breakfast => "Breakfast",
-            Slot::Lunch => "Lunch",
-            Slot::Dinner => "Dinner",
-        }
-    }
-}
-
-/// Day-of-week labels, index 0..7.
+/// Day-of-week labels, index 0..7 (Monday first).
 pub const DAY_NAMES: [&str; 7] = [
     "Monday",
     "Tuesday",
@@ -202,30 +181,73 @@ impl<'de> Deserialize<'de> for MealEntry {
     }
 }
 
-/// One day's chosen meals. `None` means the slot is empty.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+/// One day's meals, in the order they were added. A day has no fixed slots.
+///
+/// Serializes as a plain JSON array of [`MealEntry`]. The decoder also accepts
+/// the original `{breakfast, lunch, dinner}` object (slots become list entries
+/// in that order, empty slots are dropped), so links shared before days became
+/// lists still open.
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct DayPlan {
-    pub breakfast: Option<MealEntry>,
-    pub lunch: Option<MealEntry>,
-    pub dinner: Option<MealEntry>,
+    pub meals: Vec<MealEntry>,
 }
 
-impl DayPlan {
-    fn slot_mut(&mut self, slot: Slot) -> &mut Option<MealEntry> {
-        match slot {
-            Slot::Breakfast => &mut self.breakfast,
-            Slot::Lunch => &mut self.lunch,
-            Slot::Dinner => &mut self.dinner,
-        }
+impl Serialize for DayPlan {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.meals.serialize(serializer)
     }
+}
 
-    pub fn slot(&self, slot: Slot) -> &Option<MealEntry> {
-        match slot {
-            Slot::Breakfast => &self.breakfast,
-            Slot::Lunch => &self.lunch,
-            Slot::Dinner => &self.dinner,
+impl<'de> Deserialize<'de> for DayPlan {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            List(Vec<MealEntry>),
+            Slots {
+                #[serde(default)]
+                breakfast: Option<MealEntry>,
+                #[serde(default)]
+                lunch: Option<MealEntry>,
+                #[serde(default)]
+                dinner: Option<MealEntry>,
+            },
         }
+
+        Ok(match Repr::deserialize(deserializer)? {
+            Repr::List(meals) => DayPlan { meals },
+            Repr::Slots {
+                breakfast,
+                lunch,
+                dinner,
+            } => DayPlan {
+                meals: [breakfast, lunch, dinner].into_iter().flatten().collect(),
+            },
+        })
     }
+}
+
+/// A grocery item added by hand, outside any recipe.
+///
+/// Untagged on the wire: a catalog item is exactly a [`RecipeIngredient`] (the
+/// pre-existing format, keyed by `ingredient`), a custom item is `{name, quantity}`.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Extra {
+    /// A catalog ingredient with an optional amount; summed like recipe lines.
+    Catalog(RecipeIngredient),
+    /// Anything not in the catalog. The quantity is free text, shown as typed.
+    Custom {
+        name: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        quantity: Option<String>,
+    },
 }
 
 /// Number of days in a plan (Monday..Sunday).
@@ -235,17 +257,15 @@ pub const DAYS_PER_WEEK: usize = 7;
 /// and persisted locally.
 ///
 /// Wire format is plain, untagged JSON so every link ever shared keeps decoding:
-/// new fields are optional and omitted when empty, so a plan without extras
-/// serializes byte-for-byte as it did before `extras` existed.
+/// new fields are optional and omitted when empty.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MealPlan {
     /// Exactly [`DAYS_PER_WEEK`] entries after [`MealPlan::normalize`].
     pub days: Vec<DayPlan>,
-    /// Extra grocery items not tied to a meal (staples, snacks). They reference
-    /// the ingredient catalog exactly like recipe ingredients and are folded into
-    /// the shopping list unscaled.
+    /// Extra grocery items not tied to a meal (staples, snacks), folded into the
+    /// shopping list unscaled.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub extras: Vec<RecipeIngredient>,
+    pub extras: Vec<Extra>,
 }
 
 impl Default for MealPlan {
@@ -265,47 +285,47 @@ impl MealPlan {
         self.days.resize(DAYS_PER_WEEK, DayPlan::default());
     }
 
-    /// True when no slot holds a recipe and there are no extras.
+    /// True when no day holds a meal and there are no extras.
     pub fn is_empty(&self) -> bool {
         self.entries().next().is_none() && self.extras.is_empty()
     }
 
-    /// Every chosen meal, in Monday..Sunday × breakfast..dinner order.
+    /// Every chosen meal, Monday..Sunday, in each day's order.
     pub fn entries(&self) -> impl Iterator<Item = &MealEntry> {
-        self.days
-            .iter()
-            .flat_map(|d| Slot::ALL.iter().filter_map(move |&s| d.slot(s).as_ref()))
+        self.days.iter().flat_map(|d| d.meals.iter())
     }
 
-    /// Selected recipe id for a given day/slot, if any.
-    pub fn recipe_id(&self, day: usize, slot: Slot) -> Option<String> {
-        self.days
-            .get(day)
-            .and_then(|d| d.slot(slot).as_ref().map(|e| e.recipe.clone()))
+    /// Number of meals in the week.
+    pub fn meal_count(&self) -> usize {
+        self.entries().count()
     }
 
-    /// Custom target servings for a given day/slot, if set.
-    pub fn servings(&self, day: usize, slot: Slot) -> Option<u32> {
-        self.days
-            .get(day)
-            .and_then(|d| d.slot(slot).as_ref().and_then(|e| e.servings))
+    /// The `idx`-th meal of a day, if any.
+    pub fn meal(&self, day: usize, idx: usize) -> Option<&MealEntry> {
+        self.days.get(day).and_then(|d| d.meals.get(idx))
     }
 
-    /// Set (or clear, with `None`) the recipe for a given day/slot. Changing the
-    /// recipe resets any custom servings back to the recipe default.
-    pub fn set_recipe(&mut self, day: usize, slot: Slot, recipe: Option<String>) {
+    /// Append a recipe to a day (default servings).
+    pub fn add_meal(&mut self, day: usize, recipe: String) {
         if let Some(d) = self.days.get_mut(day) {
-            *d.slot_mut(slot) = recipe.map(MealEntry::new);
+            d.meals.push(MealEntry::new(recipe));
         }
     }
 
-    /// Set (or clear, with `None`) the custom servings for a given day/slot. Does
-    /// nothing if the slot is empty.
-    pub fn set_servings(&mut self, day: usize, slot: Slot, servings: Option<u32>) {
+    /// Remove the `idx`-th meal of a day. Out-of-range indices are ignored.
+    pub fn remove_meal(&mut self, day: usize, idx: usize) {
         if let Some(d) = self.days.get_mut(day) {
-            if let Some(entry) = d.slot_mut(slot) {
-                entry.servings = servings;
+            if idx < d.meals.len() {
+                d.meals.remove(idx);
             }
+        }
+    }
+
+    /// Set (or clear, with `None`) the custom servings of a meal. Does nothing
+    /// for an index that holds no meal.
+    pub fn set_servings(&mut self, day: usize, idx: usize, servings: Option<u32>) {
+        if let Some(entry) = self.days.get_mut(day).and_then(|d| d.meals.get_mut(idx)) {
+            entry.servings = servings;
         }
     }
 }
@@ -344,22 +364,50 @@ mod tests {
     }
 
     #[test]
-    fn legacy_id_only_plan_still_decodes() {
-        // Old links serialized slots as bare recipe-id strings.
-        let json = r#"{"days":[{"breakfast":"omelette","lunch":null,"dinner":null}]}"#;
-        let plan: MealPlan = serde_json::from_str(json).unwrap();
-        assert_eq!(plan.recipe_id(0, Slot::Breakfast), Some("omelette".into()));
-        assert_eq!(plan.servings(0, Slot::Breakfast), None);
+    fn day_serializes_as_a_list_and_round_trips() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(0, "oats".into());
+        plan.add_meal(0, "dal".into());
+        plan.set_servings(0, 1, Some(6));
+        let json = serde_json::to_string(&plan).unwrap();
+        assert!(
+            json.starts_with(r#"{"days":[["oats",{"recipe":"dal","servings":6}],[],"#),
+            "{json}"
+        );
+        let back: MealPlan = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, plan);
+    }
+
+    #[test]
+    fn legacy_slot_days_decode_into_lists() {
+        // Links shared before days became lists: slots as an object, meals as
+        // bare ids or {recipe, servings} objects, empty slots as null/missing.
+        let json = r#"{"days":[
+            {"breakfast":"omelette","lunch":null,"dinner":{"recipe":"dal","servings":4}},
+            {"dinner":"soup"},
+            {}
+        ]}"#;
+        let mut plan: MealPlan = serde_json::from_str(json).unwrap();
+        plan.normalize();
+        let day0: Vec<_> = plan.days[0]
+            .meals
+            .iter()
+            .map(|m| m.recipe.as_str())
+            .collect();
+        assert_eq!(day0, vec!["omelette", "dal"]);
+        assert_eq!(plan.meal(0, 1).unwrap().servings, Some(4));
+        assert_eq!(plan.meal(1, 0).unwrap().recipe, "soup");
+        assert!(plan.days[2].meals.is_empty());
+        assert_eq!(plan.days.len(), DAYS_PER_WEEK);
     }
 
     #[test]
     fn normalize_pads_and_truncates_to_seven_days() {
-        let mut short: MealPlan =
-            serde_json::from_str(r#"{"days":[{"breakfast":"omelette"}]}"#).unwrap();
+        let mut short: MealPlan = serde_json::from_str(r#"{"days":[["omelette"]]}"#).unwrap();
         short.normalize();
         assert_eq!(short.days.len(), DAYS_PER_WEEK);
-        assert_eq!(short.recipe_id(0, Slot::Breakfast), Some("omelette".into()));
-        assert_eq!(short.recipe_id(6, Slot::Dinner), None);
+        assert_eq!(short.meal(0, 0).unwrap().recipe, "omelette");
+        assert!(short.meal(6, 0).is_none());
 
         let mut long = MealPlan::default();
         long.days.push(DayPlan::default());
@@ -368,37 +416,76 @@ mod tests {
     }
 
     #[test]
-    fn extras_are_omitted_when_empty_and_round_trip() {
-        // Byte-identical to the pre-extras format, so old links don't change.
+    fn extras_are_omitted_when_empty_and_both_kinds_round_trip() {
         let empty = MealPlan::default();
         let json = serde_json::to_string(&empty).unwrap();
         assert!(!json.contains("extras"), "{json}");
 
         let mut plan = MealPlan::default();
-        plan.extras
-            .push(RecipeIngredient::new("milk".into(), Some(1000.0)));
+        plan.extras.push(Extra::Catalog(RecipeIngredient::new(
+            "milk".into(),
+            Some(1000.0),
+        )));
+        plan.extras.push(Extra::Custom {
+            name: "Bread".into(),
+            quantity: Some("1 loaf".into()),
+        });
+        plan.extras.push(Extra::Custom {
+            name: "Candles".into(),
+            quantity: None,
+        });
         let json = serde_json::to_string(&plan).unwrap();
-        assert!(json.contains("\"extras\""));
+        assert!(
+            json.contains(r#"{"ingredient":"milk","amount":1000.0}"#),
+            "{json}"
+        );
+        assert!(
+            json.contains(r#"{"name":"Bread","quantity":"1 loaf"}"#),
+            "{json}"
+        );
+        assert!(json.contains(r#"{"name":"Candles"}"#), "{json}");
         let back: MealPlan = serde_json::from_str(&json).unwrap();
         assert_eq!(back, plan);
+
+        // The pre-`Extra` format (a bare RecipeIngredient list) still decodes.
+        let legacy: MealPlan =
+            serde_json::from_str(r#"{"days":[],"extras":[{"ingredient":"milk"}]}"#).unwrap();
+        assert_eq!(
+            legacy.extras,
+            vec![Extra::Catalog(RecipeIngredient::new("milk".into(), None))]
+        );
     }
 
     #[test]
-    fn is_empty_and_entries_cover_slots_and_extras() {
+    fn add_remove_and_servings_respect_bounds() {
         let mut plan = MealPlan::default();
         assert!(plan.is_empty());
-        assert_eq!(plan.entries().count(), 0);
+        assert_eq!(plan.meal_count(), 0);
 
-        plan.set_recipe(2, Slot::Lunch, Some("dal".into()));
-        plan.set_recipe(0, Slot::Dinner, Some("soup".into()));
+        plan.add_meal(2, "dal".into());
+        plan.add_meal(0, "soup".into());
+        plan.add_meal(9, "ghost".into()); // out of range: ignored
         assert!(!plan.is_empty());
         let ids: Vec<&str> = plan.entries().map(|e| e.recipe.as_str()).collect();
-        assert_eq!(ids, vec!["soup", "dal"]); // plan order: Mon dinner, then Wed lunch
+        assert_eq!(ids, vec!["soup", "dal"]); // Monday first, then Wednesday
+        assert_eq!(plan.meal_count(), 2);
+
+        plan.set_servings(2, 0, Some(6));
+        plan.set_servings(2, 5, Some(6)); // no such meal: ignored
+        assert_eq!(plan.meal(2, 0).unwrap().servings, Some(6));
+        plan.set_servings(2, 0, None);
+        assert_eq!(plan.meal(2, 0).unwrap().servings, None);
+
+        plan.remove_meal(2, 3); // ignored
+        plan.remove_meal(2, 0);
+        assert!(plan.days[2].meals.is_empty());
+        assert_eq!(plan.meal_count(), 1);
 
         let mut only_extras = MealPlan::default();
-        only_extras
-            .extras
-            .push(RecipeIngredient::new("bread".into(), None));
+        only_extras.extras.push(Extra::Custom {
+            name: "bread".into(),
+            quantity: None,
+        });
         assert!(!only_extras.is_empty());
     }
 }

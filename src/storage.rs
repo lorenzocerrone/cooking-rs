@@ -14,11 +14,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::MealPlan;
 use crate::quantity::Dimension;
-use crate::shopping::ShoppingLine;
+use crate::shopping::{ShoppingCategory, ShoppingLine};
 
 /// Bump when the stored shape changes incompatibly; older app versions refuse
 /// newer payloads instead of misreading them.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 const STORAGE_KEY: &str = "cooking-rs.state";
 
@@ -102,6 +102,41 @@ impl GroceryState {
         }
     }
 
+    /// The lines actually shown and exported: without the "to taste"-only lines
+    /// when hidden, and without the ingredients the user has at home. Empty
+    /// categories are dropped.
+    pub fn visible(&self, categories: &[ShoppingCategory]) -> Vec<ShoppingCategory> {
+        categories
+            .iter()
+            .filter_map(|cat| {
+                let lines: Vec<ShoppingLine> = cat
+                    .lines
+                    .iter()
+                    .filter(|line| {
+                        let to_taste_only = line.subtotals.is_empty()
+                            && line.custom_quantities.is_empty()
+                            && line.to_taste;
+                        !(self.is_omitted(&line.key) || self.hide_to_taste && to_taste_only)
+                    })
+                    .cloned()
+                    .collect();
+                (!lines.is_empty()).then(|| ShoppingCategory {
+                    name: cat.name.clone(),
+                    lines,
+                })
+            })
+            .collect()
+    }
+
+    /// Number of visible lines not yet ticked (the grocery tab badge).
+    pub fn remaining(&self, categories: &[ShoppingCategory]) -> usize {
+        self.visible(categories)
+            .iter()
+            .flat_map(|c| c.lines.iter())
+            .filter(|l| !self.is_checked(&l.key))
+            .count()
+    }
+
     /// Drop ticks for lines that are gone or whose amounts changed. Returns
     /// whether anything was removed. `omitted` is never pruned.
     pub fn prune_checked(&mut self, lines: &[ShoppingLine]) -> bool {
@@ -132,15 +167,37 @@ pub fn decode(raw: &str) -> Option<PersistedState> {
     Some(state)
 }
 
-/// Startup precedence: a plan in the URL hash wins (it is a share link) but the
-/// device's grocery state is kept; otherwise the stored state; otherwise empty.
-pub fn resolve_initial(hash: Option<MealPlan>, stored: Option<PersistedState>) -> PersistedState {
+/// What the app starts with.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Startup {
+    /// The active state: the plan shown and edited, plus this device's grocery state.
+    pub state: PersistedState,
+    /// `Some` while **previewing a shared plan**: the device's own plan (or an
+    /// empty week if it had none), kept aside until the user keeps the shared
+    /// plan or goes back to their own. Nothing is persisted while this is `Some`.
+    pub own_plan: Option<MealPlan>,
+}
+
+/// Startup precedence: a plan in the URL hash (a share link) is shown first, with
+/// the device's own plan set aside; the device's grocery state is always kept.
+/// Without a hash plan, the stored state is used; otherwise an empty week.
+pub fn resolve_initial(hash: Option<MealPlan>, stored: Option<PersistedState>) -> Startup {
     match (hash, stored) {
-        (Some(plan), stored) => {
-            PersistedState::new(plan, stored.map(|s| s.grocery).unwrap_or_default())
+        (Some(shared), stored) => {
+            let (own, grocery) = stored.map(|s| (s.plan, s.grocery)).unwrap_or_default();
+            Startup {
+                state: PersistedState::new(shared, grocery),
+                own_plan: Some(own),
+            }
         }
-        (None, Some(stored)) => PersistedState::new(stored.plan, stored.grocery),
-        (None, None) => PersistedState::new(MealPlan::default(), GroceryState::default()),
+        (None, Some(stored)) => Startup {
+            state: PersistedState::new(stored.plan, stored.grocery),
+            own_plan: None,
+        },
+        (None, None) => Startup {
+            state: PersistedState::new(MealPlan::default(), GroceryState::default()),
+            own_plan: None,
+        },
     }
 }
 
@@ -165,7 +222,7 @@ pub fn save(state: &PersistedState) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{RecipeIngredient, Slot, DAYS_PER_WEEK};
+    use crate::models::{Extra, RecipeIngredient, DAYS_PER_WEEK};
     use crate::shopping::Subtotal;
 
     fn line(key: &str, amounts: &[(Dimension, f64)]) -> ShoppingLine {
@@ -180,14 +237,17 @@ mod tests {
             to_taste: false,
             optional: false,
             sources: vec![],
+            custom_quantities: vec![],
         }
     }
 
     fn sample() -> PersistedState {
         let mut plan = MealPlan::default();
-        plan.set_recipe(1, Slot::Lunch, Some("dal".into()));
-        plan.extras
-            .push(RecipeIngredient::new("milk".into(), Some(1000.0)));
+        plan.add_meal(1, "dal".into());
+        plan.extras.push(Extra::Catalog(RecipeIngredient::new(
+            "milk".into(),
+            Some(1000.0),
+        )));
         let mut grocery = GroceryState::default();
         grocery.toggle_checked(&line("onion", &[(Dimension::Mass, 250.0)]));
         grocery.toggle_omitted("salt");
@@ -199,7 +259,7 @@ mod tests {
     fn round_trips_through_json() {
         let state = sample();
         let raw = encode(&state).unwrap();
-        assert!(raw.starts_with("{\"version\":1"));
+        assert!(raw.starts_with("{\"version\":2"));
         assert_eq!(decode(&raw), Some(state));
     }
 
@@ -211,30 +271,73 @@ mod tests {
         let partial = decode("{\"plan\":{\"days\":[{\"dinner\":\"soup\"}]}}").unwrap();
         assert_eq!(partial.version, SCHEMA_VERSION);
         assert_eq!(partial.plan.days.len(), DAYS_PER_WEEK);
-        assert_eq!(partial.plan.recipe_id(0, Slot::Dinner), Some("soup".into()));
+        assert_eq!(partial.plan.meal(0, 0).unwrap().recipe, "soup");
         assert_eq!(partial.grocery, GroceryState::default());
     }
 
     #[test]
-    fn hash_plan_wins_but_keeps_device_grocery_state() {
+    fn hash_plan_is_previewed_and_keeps_device_grocery_state() {
         let stored = sample();
         let mut shared = MealPlan::default();
-        shared.set_recipe(6, Slot::Breakfast, Some("pancakes".into()));
+        shared.add_meal(6, "pancakes".into());
 
         let r = resolve_initial(Some(shared.clone()), Some(stored.clone()));
-        assert_eq!(r.plan, shared);
-        assert_eq!(r.grocery, stored.grocery);
-        assert_eq!(r.version, SCHEMA_VERSION);
+        assert_eq!(r.state.plan, shared);
+        assert_eq!(r.state.grocery, stored.grocery);
+        assert_eq!(r.state.version, SCHEMA_VERSION);
+        assert_eq!(r.own_plan, Some(stored.plan.clone()));
 
         let r = resolve_initial(Some(shared.clone()), None);
-        assert_eq!(r.plan, shared);
-        assert_eq!(r.grocery, GroceryState::default());
+        assert_eq!(r.state.plan, shared);
+        assert_eq!(r.state.grocery, GroceryState::default());
+        assert_eq!(r.own_plan, Some(MealPlan::default()));
 
         let r = resolve_initial(None, Some(stored.clone()));
-        assert_eq!(r.plan, stored.plan);
-        assert_eq!(r.grocery, stored.grocery);
+        assert_eq!(r.state.plan, stored.plan);
+        assert_eq!(r.state.grocery, stored.grocery);
+        assert_eq!(r.own_plan, None);
 
-        assert_eq!(resolve_initial(None, None).plan, MealPlan::default());
+        let r = resolve_initial(None, None);
+        assert_eq!(r.state.plan, MealPlan::default());
+        assert_eq!(r.own_plan, None);
+    }
+
+    #[test]
+    fn visible_and_remaining_apply_omissions_and_the_to_taste_toggle() {
+        let mut salt = line("salt", &[]);
+        salt.to_taste = true;
+        let mut bread = line("custom:bread", &[]);
+        bread.custom_quantities = vec!["1 loaf".into()];
+        let cats = vec![
+            ShoppingCategory {
+                name: "Produce".into(),
+                lines: vec![
+                    line("onion", &[(Dimension::Mass, 250.0)]),
+                    line("garlic", &[(Dimension::Mass, 12.0)]),
+                ],
+            },
+            ShoppingCategory {
+                name: "Spices & Oils".into(),
+                lines: vec![salt],
+            },
+            ShoppingCategory {
+                name: "Other".into(),
+                lines: vec![bread],
+            },
+        ];
+        let mut g = GroceryState::default();
+        assert_eq!(g.visible(&cats).len(), 3);
+        assert_eq!(g.remaining(&cats), 4);
+
+        g.hide_to_taste = true;
+        let v = g.visible(&cats);
+        assert_eq!(v.len(), 2, "to-taste-only aisle dropped, custom kept");
+        assert_eq!(g.remaining(&cats), 3);
+
+        g.toggle_omitted("onion");
+        g.toggle_checked(&line("garlic", &[(Dimension::Mass, 12.0)]));
+        assert_eq!(g.visible(&cats)[0].lines.len(), 1);
+        assert_eq!(g.remaining(&cats), 1);
     }
 
     #[test]

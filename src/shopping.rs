@@ -8,7 +8,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::models::{IngredientCatalog, MealPlan, Recipe, RecipeIngredient};
+use crate::models::{Extra, IngredientCatalog, MealPlan, Recipe, RecipeIngredient};
 use crate::quantity::{resolve_unit, to_shopping, Converted, CountSpec, Dimension, Quantity};
 
 /// Preferred category ordering for the shopping list.
@@ -24,12 +24,24 @@ pub const CATEGORY_ORDER: &[&str] = &[
     "Spices & Oils",
 ];
 
-/// Sort key for a category name following [`CATEGORY_ORDER`] (known first).
+/// Aisle for hand-typed extras that are not in the catalog. Always sorts last.
+pub const OTHER_CATEGORY: &str = "Other";
+
+/// Sort key for a category name following [`CATEGORY_ORDER`] (known first,
+/// unknown after, [`OTHER_CATEGORY`] at the very end).
 pub fn category_sort_key(name: &str) -> usize {
+    if name == OTHER_CATEGORY {
+        return usize::MAX;
+    }
     CATEGORY_ORDER
         .iter()
         .position(|known| *known == name)
         .unwrap_or(CATEGORY_ORDER.len())
+}
+
+/// Line key for a custom (non-catalog) extra: stable per name, case-insensitive.
+pub fn custom_key(name: &str) -> String {
+    format!("custom:{}", name.trim().to_lowercase())
 }
 
 /// A summed amount in one dimension, expressed in that dimension's base unit
@@ -57,6 +69,9 @@ pub struct ShoppingLine {
     pub optional: bool,
     /// Recipe ids that contributed, de-duplicated, in plan order.
     pub sources: Vec<String>,
+    /// Free-text quantities of custom extras ("1 loaf"), shown verbatim. Only
+    /// set on `custom:*` lines, which have no `subtotals`.
+    pub custom_quantities: Vec<String>,
 }
 
 /// A category section of the shopping list.
@@ -139,8 +154,10 @@ pub fn aggregate(
         }
     }
     // Extras are plain grocery items: never scaled, no recipe source.
-    for item in &plan.extras {
-        add(item, 1.0, None);
+    for extra in &plan.extras {
+        if let Extra::Catalog(item) = extra {
+            add(item, 1.0, None);
+        }
     }
 
     // Group by category.
@@ -164,7 +181,42 @@ pub fn aggregate(
                 to_taste: acc.to_taste,
                 optional: acc.optional,
                 sources: acc.sources,
+                custom_quantities: Vec::new(),
             });
+    }
+
+    // Custom extras: one line per distinct name in the "Other" aisle, quantities
+    // kept as typed (and merged when the same name was added twice).
+    let mut customs: BTreeMap<String, ShoppingLine> = BTreeMap::new();
+    for extra in &plan.extras {
+        let Extra::Custom { name, quantity } = extra else {
+            continue;
+        };
+        let name = name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let line = customs
+            .entry(custom_key(name))
+            .or_insert_with_key(|key| ShoppingLine {
+                key: key.clone(),
+                name: name.to_string(),
+                count: None,
+                subtotals: Vec::new(),
+                to_taste: false,
+                optional: false,
+                sources: Vec::new(),
+                custom_quantities: Vec::new(),
+            });
+        if let Some(q) = quantity.as_deref().map(str::trim).filter(|q| !q.is_empty()) {
+            line.custom_quantities.push(q.to_string());
+        }
+    }
+    if !customs.is_empty() {
+        by_category
+            .entry(OTHER_CATEGORY.to_string())
+            .or_default()
+            .extend(customs.into_values());
     }
 
     // Order categories: known order first, then unknown alphabetically.
@@ -182,7 +234,7 @@ pub fn aggregate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{CatalogIngredient, Slot};
+    use crate::models::CatalogIngredient;
     use crate::quantity::Unit;
     use std::collections::HashMap;
 
@@ -297,8 +349,8 @@ mod tests {
             recipe("tacos", 2, vec![ing("onion", Some(100.0), None)]),
         ];
         let mut plan = MealPlan::default();
-        plan.set_recipe(0, Slot::Dinner, Some("dal".into()));
-        plan.set_recipe(1, Slot::Lunch, Some("tacos".into()));
+        plan.add_meal(0, "dal".into());
+        plan.add_meal(1, "tacos".into());
         let cats = aggregate(&plan, &recipes, &catalog());
 
         assert_eq!(sub(line(&cats, "onion")), vec![(Dimension::Mass, 250.0)]);
@@ -327,7 +379,7 @@ mod tests {
             ],
         )];
         let mut plan = MealPlan::default();
-        plan.set_recipe(0, Slot::Breakfast, Some("r".into()));
+        plan.add_meal(0, "r".into());
         let cats = aggregate(&plan, &recipes, &catalog());
         assert_eq!(
             sub(line(&cats, "lemon")),
@@ -348,9 +400,9 @@ mod tests {
             recipe("b", 1, vec![ing("salt", Some(5.0), None)]),
         ];
         let mut plan = MealPlan::default();
-        plan.set_recipe(0, Slot::Dinner, Some("a".into()));
-        plan.set_servings(0, Slot::Dinner, Some(4)); // ×2
-        plan.set_recipe(2, Slot::Dinner, Some("a".into())); // default servings
+        plan.add_meal(0, "a".into());
+        plan.set_servings(0, 0, Some(4)); // ×2
+        plan.add_meal(2, "a".into()); // default servings
         let cats = aggregate(&plan, &recipes, &catalog());
         assert_eq!(
             sub(line(&cats, "olive_oil")),
@@ -359,7 +411,7 @@ mod tests {
         let salt = line(&cats, "salt");
         assert!(salt.to_taste && salt.subtotals.is_empty() && salt.optional);
 
-        plan.set_recipe(3, Slot::Lunch, Some("b".into()));
+        plan.add_meal(3, "b".into());
         let cats = aggregate(&plan, &recipes, &catalog());
         let salt = line(&cats, "salt");
         assert!(salt.to_taste && !salt.optional);
@@ -370,8 +422,10 @@ mod tests {
     #[test]
     fn extras_are_added_unscaled_without_source() {
         let mut plan = MealPlan::default();
-        plan.extras.push(ing("egg", Some(6.0), None));
-        plan.extras.push(ing("olive_oil", Some(0.5), Some("l")));
+        plan.extras
+            .push(Extra::Catalog(ing("egg", Some(6.0), None)));
+        plan.extras
+            .push(Extra::Catalog(ing("olive_oil", Some(0.5), Some("l"))));
         let cats = aggregate(&plan, &[], &catalog());
         assert_eq!(sub(line(&cats, "egg")), vec![(Dimension::Count, 6.0)]);
         assert_eq!(
@@ -379,6 +433,40 @@ mod tests {
             vec![(Dimension::Volume, 500.0)]
         );
         assert!(line(&cats, "egg").sources.is_empty());
+    }
+
+    #[test]
+    fn custom_extras_land_last_in_other_and_merge_by_name() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(0, "r".into());
+        plan.extras.push(Extra::Custom {
+            name: "Bread".into(),
+            quantity: Some("1 loaf".into()),
+        });
+        plan.extras.push(Extra::Custom {
+            name: "bread ".into(),
+            quantity: Some("2 rolls".into()),
+        });
+        plan.extras.push(Extra::Custom {
+            name: "Candles".into(),
+            quantity: None,
+        });
+        plan.extras.push(Extra::Custom {
+            name: "   ".into(),
+            quantity: None,
+        });
+        let recipes = vec![recipe("r", 1, vec![ing("salt", Some(1.0), None)])];
+        let cats = aggregate(&plan, &recipes, &catalog());
+        let names: Vec<&str> = cats.iter().map(|c| c.name.as_str()).collect();
+        assert_eq!(names, vec!["Spices & Oils", OTHER_CATEGORY]);
+        let other = &cats[1];
+        assert_eq!(other.lines.len(), 2);
+        let bread = line(&cats, "custom:bread");
+        assert_eq!(bread.name, "Bread");
+        assert_eq!(bread.custom_quantities, vec!["1 loaf", "2 rolls"]);
+        assert!(bread.subtotals.is_empty());
+        assert!(line(&cats, "custom:candles").custom_quantities.is_empty());
+        assert_eq!(custom_key(" Bread "), "custom:bread");
     }
 
     #[test]
@@ -393,8 +481,8 @@ mod tests {
             ],
         )];
         let mut plan = MealPlan::default();
-        plan.set_recipe(0, Slot::Dinner, Some("r".into()));
-        plan.set_recipe(1, Slot::Dinner, Some("ghost".into()));
+        plan.add_meal(0, "r".into());
+        plan.add_meal(1, "ghost".into());
         let cats = aggregate(&plan, &recipes, &catalog());
         let names: Vec<&str> = cats.iter().map(|c| c.name.as_str()).collect();
         assert_eq!(names, vec!["Produce", "Spices & Oils"]);

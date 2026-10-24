@@ -5,7 +5,7 @@
 // app (wasm, JS, CSS, HTML — all data is embedded in the wasm) works offline.
 // We don't precache hashed asset names because Trunk fingerprints them.
 
-const CACHE = "cooking-rs-v2";
+const CACHE = "cooking-rs-v3";
 
 // On a local dev host a service worker sits in front of a live-reloading dev
 // server and happily serves stale/broken assets. Detect dev and self-destruct

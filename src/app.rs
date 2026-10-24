@@ -2,10 +2,11 @@ use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::path;
 
-use crate::components::Nav;
+use crate::components::{Nav, Toast};
 use crate::models::MealPlan;
 use crate::pages::{GroceryPage, PlannerPage, RecipeDetailPage, RecipesPage};
-use crate::state::{read_hash, write_hash};
+use crate::recipes::{load_data, AppData};
+use crate::state::{clear_hash, read_hash};
 use crate::storage::{self, GroceryState, PersistedState};
 
 /// Router base path. Empty for local dev (served at `/`); the deploy workflow sets
@@ -29,55 +30,85 @@ pub fn href(path: &str) -> String {
     route_url(BASE_PATH, path)
 }
 
+/// The recipes and catalog, loaded once for the whole app.
+pub type DataResource = Resource<AppData>;
+
 /// Root component: the nav shell plus client-side routing.
 #[component]
 pub fn App() -> impl IntoView {
-    // Two pieces of shared, app-wide state, provided here so any page can read or
-    // update them:
-    // - the meal plan (the planner edits it; recipe pages add to it), which is
-    //   mirrored into the URL hash for sharing and persisted locally;
-    // - the grocery check-off state, persisted locally only.
-    // A plan in the hash (a shared link) wins over the stored one on startup.
-    let initial = storage::resolve_initial(read_hash(), storage::load());
-    let plan = RwSignal::new(initial.plan);
-    let grocery = RwSignal::new(initial.grocery);
+    // Shared, app-wide state, provided here so any page can read or update it:
+    // - the meal plan (the planner edits it; recipe pages add to it), persisted
+    //   locally and exported on demand as a `#plan=` share link;
+    // - the grocery check-off state, persisted locally only;
+    // - `own_plan`: `Some` while a shared plan is being previewed (the device's
+    //   own plan is set aside and nothing is persisted until the user decides);
+    // - a one-line toast message;
+    // - the recipe data, loaded once.
+    let startup = storage::resolve_initial(read_hash(), storage::load());
+    let previewing = startup.own_plan.is_some();
+    let plan = RwSignal::new(startup.state.plan);
+    let grocery = RwSignal::new(startup.state.grocery);
+    let own_plan = RwSignal::new(startup.own_plan);
+    let toast = RwSignal::new(None::<String>);
+    let data: DataResource = Resource::new(|| (), |_| async { load_data().await });
     provide_context(plan);
     provide_context(grocery);
+    provide_context(own_plan);
+    provide_context(toast);
+    provide_context(data);
 
-    // Persist on every change (including the initial merge above).
+    // The share link has been read; keep the address bar clean from here on.
+    if previewing {
+        clear_hash();
+    }
+
+    // Persist on every change, except while previewing someone else's plan.
     Effect::new(move |_| {
-        storage::save(&PersistedState::new(plan.get(), grocery.get()));
-    });
-
-    // Keep the URL hash in sync so the address bar is always a shareable snapshot.
-    // Skip the initial run when the plan is empty so plain page loads don't get an
-    // empty `#plan=` stamped on them.
-    Effect::new(move |prev: Option<()>| {
-        let current = plan.get();
-        if prev.is_none() && current == MealPlan::default() {
-            return;
+        let state = PersistedState::new(plan.get(), grocery.get());
+        if own_plan.with(|o| o.is_none()) {
+            storage::save(&state);
         }
-        write_hash(&current);
     });
 
     view! {
         <Router base=BASE_PATH>
             <Nav />
             <main>
-                <Routes fallback=|| view! { <p>"Page not found."</p> }>
+                <Routes fallback=|| view! { <p class="muted">"Page not found."</p> }>
                     <Route path=path!("/") view=RecipesPage />
                     <Route path=path!("/recipe/:id") view=RecipeDetailPage />
                     <Route path=path!("/planner") view=PlannerPage />
                     <Route path=path!("/grocery") view=GroceryPage />
                 </Routes>
             </main>
+            <Toast />
         </Router>
     }
 }
 
-/// Convenience for pages: the shared grocery state.
+/// The shared meal plan.
+pub fn use_plan() -> RwSignal<MealPlan> {
+    expect_context::<RwSignal<MealPlan>>()
+}
+
+/// The shared grocery state.
 pub fn use_grocery() -> RwSignal<GroceryState> {
     expect_context::<RwSignal<GroceryState>>()
+}
+
+/// The device's own plan while a shared plan is previewed (`None` otherwise).
+pub fn use_own_plan() -> RwSignal<Option<MealPlan>> {
+    expect_context::<RwSignal<Option<MealPlan>>>()
+}
+
+/// Show a short confirmation message ("Link copied").
+pub fn notify(message: impl Into<String>) {
+    expect_context::<RwSignal<Option<String>>>().set(Some(message.into()));
+}
+
+/// The app's recipe data (one load, shared by every page).
+pub fn use_app_data() -> DataResource {
+    expect_context::<DataResource>()
 }
 
 #[cfg(test)]

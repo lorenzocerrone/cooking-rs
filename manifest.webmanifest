@@ -1,12 +1,12 @@
 {
-  "name": "Cooking-rs — Recipes & Meal Planner",
-  "short_name": "Cooking-rs",
-  "description": "Browse recipes and build a shareable weekly meal plan.",
+  "name": "cooking-rs — recipes, week, grocery",
+  "short_name": "cooking-rs",
+  "description": "Organize recipes, plan the week and get the grocery list.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#b5651d",
+  "background_color": "#EFE8D8",
+  "theme_color": "#A85E30",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }

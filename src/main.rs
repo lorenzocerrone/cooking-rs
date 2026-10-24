@@ -1,5 +1,6 @@
 mod app;
 mod components;
+mod extras;
 mod filter;
 mod format;
 mod models;

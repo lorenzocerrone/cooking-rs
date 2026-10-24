@@ -12,6 +12,7 @@ serde_json = "1"
 include_dir = "0.7"
 base64 = "0.22"
 console_error_panic_hook = "0.1"
+js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "Window",
     "Location",
@@ -23,7 +24,13 @@ web-sys = { version = "0.3", features = [
     "HtmlHeadElement",
     "ServiceWorkerContainer",
     "Storage",
-    "Performance",
+    "History",
+    "HtmlElement",
+    "TouchEvent",
+    "TouchList",
+    "Touch",
+    "ScrollIntoViewOptions",
+    "ScrollLogicalPosition",
 ] }
 
 [profile.release]
