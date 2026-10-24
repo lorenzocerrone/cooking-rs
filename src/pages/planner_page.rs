@@ -51,14 +51,8 @@ fn PlannerGrid(
         recipes.with_value(|r| catalog.with_value(|c| aggregate(&plan.get(), r, c)))
     });
 
-    // True when no slot in the whole week has a recipe.
-    let is_empty = Memo::new(move |_| {
-        plan.with(|p| {
-            p.days
-                .iter()
-                .all(|d| Slot::ALL.iter().all(|&s| d.slot(s).is_none()))
-        })
-    });
+    // True when the week has no meals and no extras.
+    let is_empty = Memo::new(move |_| plan.with(|p| p.is_empty()));
 
     // Recipe-overview modal state.
     let modal_open = RwSignal::new(false);

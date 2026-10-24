@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::models::{IngredientCatalog, MealPlan, Recipe};
+use crate::models::{IngredientCatalog, MealPlan, Recipe, RecipeIngredient};
 
 /// Preferred category ordering for the shopping list (and the ingredients page).
 /// Unknown categories are appended afterwards, sorted alphabetically.
@@ -64,36 +64,39 @@ pub fn aggregate(
     }
     let mut totals: BTreeMap<String, Acc> = BTreeMap::new();
 
-    for day in &plan.days {
-        for entry in [&day.breakfast, &day.lunch, &day.dinner]
-            .into_iter()
-            .flatten()
-        {
-            let Some(recipe) = recipes.iter().find(|r| r.id == entry.recipe) else {
-                continue;
-            };
-            // Scale ingredient amounts to the chosen servings (default: no scaling).
-            let target = entry.servings.unwrap_or(recipe.servings);
-            let factor = target as f64 / recipe.servings.max(1) as f64;
-            for item in &recipe.ingredients {
-                let Some(info) = catalog.get(&item.ingredient) else {
-                    continue;
-                };
-                let acc = totals
-                    .entry(item.ingredient.clone())
-                    .or_insert_with(|| Acc {
-                        name: info.name.clone(),
-                        unit: info.unit.clone(),
-                        category: info.category.clone(),
-                        total: None,
-                        to_taste: false,
-                    });
-                match item.amount {
-                    Some(a) => *acc.total.get_or_insert(0.0) += a * factor,
-                    None => acc.to_taste = true,
-                }
-            }
+    let mut add = |item: &RecipeIngredient, factor: f64| {
+        let Some(info) = catalog.get(&item.ingredient) else {
+            return;
+        };
+        let acc = totals
+            .entry(item.ingredient.clone())
+            .or_insert_with(|| Acc {
+                name: info.name.clone(),
+                unit: info.unit.clone(),
+                category: info.category.clone(),
+                total: None,
+                to_taste: false,
+            });
+        match item.amount {
+            Some(a) => *acc.total.get_or_insert(0.0) += a * factor,
+            None => acc.to_taste = true,
         }
+    };
+
+    for entry in plan.entries() {
+        let Some(recipe) = recipes.iter().find(|r| r.id == entry.recipe) else {
+            continue;
+        };
+        // Scale ingredient amounts to the chosen servings (default: no scaling).
+        let target = entry.servings.unwrap_or(recipe.servings);
+        let factor = target as f64 / recipe.servings.max(1) as f64;
+        for item in &recipe.ingredients {
+            add(item, factor);
+        }
+    }
+    // Extras are plain grocery items: never scaled.
+    for item in &plan.extras {
+        add(item, 1.0);
     }
 
     // Group by category.
