@@ -11,8 +11,8 @@
   "ingredients": [
     { "ingredient": "chicken_breast", "amount": 400 },
     { "ingredient": "broccoli", "amount": 250 },
-    { "ingredient": "bell_pepper", "amount": 150 },
-    { "ingredient": "garlic", "amount": 10 },
+    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "minced" },
     { "ingredient": "soy_sauce", "amount": 45 },
     { "ingredient": "sesame_oil", "amount": 15 },
     { "ingredient": "rice", "amount": 240 }

@@ -11,7 +11,7 @@
   "ingredients": [
     { "ingredient": "egg", "amount": 3 },
     { "ingredient": "butter", "amount": 15 },
-    { "ingredient": "chives", "amount": 5 },
+    { "ingredient": "chives", "amount": 5, "optional": true },
     { "ingredient": "salt" }
   ],
   "steps": [

@@ -9,10 +9,10 @@
   "prep_time": 10,
   "cook_time": 30,
   "ingredients": [
-    { "ingredient": "tomato", "amount": 800 },
-    { "ingredient": "onion", "amount": 150 },
-    { "ingredient": "garlic", "amount": 15 },
-    { "ingredient": "olive_oil", "amount": 30 },
+    { "ingredient": "chopped_tomatoes", "amount": 2, "unit": "cans" },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "diced" },
+    { "ingredient": "garlic", "amount": 4, "unit": "cloves" },
+    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
     { "ingredient": "vegetable_broth", "amount": 500 },
     { "ingredient": "salt" },
     { "ingredient": "black_pepper" }

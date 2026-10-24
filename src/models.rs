@@ -6,6 +6,8 @@ use std::collections::HashMap;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::quantity::{CountSpec, Unit};
+
 /// A single recipe, as authored in `recipes/*.json`. Ingredients reference the
 /// central catalog ([`IngredientCatalog`]) by key rather than embedding their own
 /// names/units, so amounts can be summed across recipes.
@@ -13,6 +15,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// Everything beyond the original core fields is optional (`#[serde(default)]`) so
 /// older recipe files keep parsing unchanged.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct Recipe {
     pub id: String,
     pub title: String,
@@ -41,24 +44,57 @@ pub struct Recipe {
 }
 
 /// A recipe's reference to a catalog ingredient. `amount: None` means "to taste"
-/// (rendered but not numerically summed).
+/// (rendered but not numerically summed). Also used for a plan's extras, so the
+/// optional fields are skipped when empty to keep share links short.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct RecipeIngredient {
     /// Key into the [`IngredientCatalog`].
     pub ingredient: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount: Option<f64>,
+    /// Unit as written in the recipe: any [`Unit`] spelling, or the ingredient's
+    /// piece label ("clove", "can"). `None` means the catalog's shopping unit.
+    /// Kept as text because resolving labels needs the catalog
+    /// (see [`crate::quantity::resolve_unit`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit: Option<String>,
+    /// Preparation note shown next to the name ("finely chopped").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Optional ingredients are listed but flagged, in the recipe and the list.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub optional: bool,
+}
+
+impl RecipeIngredient {
+    /// An ingredient in its catalog unit with no note.
+    #[cfg(test)]
+    pub fn new(ingredient: String, amount: Option<f64>) -> Self {
+        Self {
+            ingredient,
+            amount,
+            unit: None,
+            note: None,
+            optional: false,
+        }
+    }
 }
 
 /// One entry in the ingredient catalog (`ingredients.json`). The map key is the
 /// lookup id used by [`RecipeIngredient::ingredient`].
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct CatalogIngredient {
     pub name: String,
-    /// The single canonical unit for this ingredient (e.g. "g", "ml", "unit").
-    pub unit: String,
+    /// The **shopping unit**: how this ingredient is bought and summed. Must be a
+    /// base unit (`g`, `ml` or `pcs`); recipes may use any convertible unit.
+    pub unit: Unit,
     /// Shopping-aisle grouping (e.g. "Produce", "Dairy & Eggs").
     pub category: String,
+    /// How the ingredient is counted in pieces, if recipes may do so.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub count: Option<CountSpec>,
 }
 
 /// The full ingredient catalog: `key -> entry`.
@@ -339,10 +375,8 @@ mod tests {
         assert!(!json.contains("extras"), "{json}");
 
         let mut plan = MealPlan::default();
-        plan.extras.push(RecipeIngredient {
-            ingredient: "milk".into(),
-            amount: Some(1000.0),
-        });
+        plan.extras
+            .push(RecipeIngredient::new("milk".into(), Some(1000.0)));
         let json = serde_json::to_string(&plan).unwrap();
         assert!(json.contains("\"extras\""));
         let back: MealPlan = serde_json::from_str(&json).unwrap();
@@ -362,10 +396,9 @@ mod tests {
         assert_eq!(ids, vec!["soup", "dal"]); // plan order: Mon dinner, then Wed lunch
 
         let mut only_extras = MealPlan::default();
-        only_extras.extras.push(RecipeIngredient {
-            ingredient: "bread".into(),
-            amount: None,
-        });
+        only_extras
+            .extras
+            .push(RecipeIngredient::new("bread".into(), None));
         assert!(!only_extras.is_empty());
     }
 }

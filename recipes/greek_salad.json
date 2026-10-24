@@ -14,7 +14,7 @@
     { "ingredient": "red_onion", "amount": 60 },
     { "ingredient": "feta", "amount": 120 },
     { "ingredient": "olives", "amount": 50 },
-    { "ingredient": "olive_oil", "amount": 30 },
+    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
     { "ingredient": "oregano", "amount": 2 },
     { "ingredient": "salt" }
   ],

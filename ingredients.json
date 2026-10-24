@@ -1,15 +1,15 @@
 {
-  "tomato":           { "name": "Tomato",           "unit": "g",    "category": "Produce" },
+  "tomato":           { "name": "Tomato",           "unit": "g",    "category": "Produce",        "count": { "per_piece": 120 } },
   "cucumber":         { "name": "Cucumber",         "unit": "g",    "category": "Produce" },
-  "red_onion":        { "name": "Red onion",        "unit": "g",    "category": "Produce" },
-  "onion":            { "name": "Onion",            "unit": "g",    "category": "Produce" },
-  "garlic":           { "name": "Garlic",           "unit": "g",    "category": "Produce" },
+  "red_onion":        { "name": "Red onion",        "unit": "g",    "category": "Produce",        "count": { "per_piece": 100 } },
+  "onion":            { "name": "Onion",            "unit": "g",    "category": "Produce",        "count": { "per_piece": 150 } },
+  "garlic":           { "name": "Garlic",           "unit": "g",    "category": "Produce",        "count": { "label": "clove", "per_piece": 4 } },
   "olives":           { "name": "Kalamata olives",  "unit": "g",    "category": "Produce" },
-  "banana":           { "name": "Banana",           "unit": "unit", "category": "Produce" },
+  "banana":           { "name": "Banana",           "unit": "pcs",  "category": "Produce" },
   "chives":           { "name": "Chives",           "unit": "g",    "category": "Produce" },
   "basil":            { "name": "Basil",            "unit": "g",    "category": "Produce" },
   "lettuce":          { "name": "Lettuce",          "unit": "g",    "category": "Produce" },
-  "bell_pepper":      { "name": "Bell pepper",      "unit": "g",    "category": "Produce" },
+  "bell_pepper":      { "name": "Bell pepper",      "unit": "g",    "category": "Produce",        "count": { "per_piece": 150 } },
   "broccoli":         { "name": "Broccoli",         "unit": "g",    "category": "Produce" },
   "scallion":         { "name": "Scallion",         "unit": "g",    "category": "Produce" },
 
@@ -17,7 +17,7 @@
   "ground_beef":      { "name": "Ground beef",      "unit": "g",    "category": "Meat" },
   "chicken_breast":   { "name": "Chicken breast",   "unit": "g",    "category": "Meat" },
 
-  "egg":              { "name": "Egg",              "unit": "unit", "category": "Dairy & Eggs" },
+  "egg":              { "name": "Egg",              "unit": "pcs",  "category": "Dairy & Eggs", "count": { "per_piece": 55 } },
   "pecorino":         { "name": "Pecorino Romano",  "unit": "g",    "category": "Dairy & Eggs" },
   "butter":           { "name": "Butter",           "unit": "g",    "category": "Dairy & Eggs" },
   "feta":             { "name": "Feta",             "unit": "g",    "category": "Dairy & Eggs" },
@@ -31,7 +31,7 @@
   "rice":             { "name": "Rice",             "unit": "g",    "category": "Pasta & Grains" },
 
   "pizza_dough":      { "name": "Pizza dough",      "unit": "g",    "category": "Bakery" },
-  "tortilla":         { "name": "Tortilla",         "unit": "unit", "category": "Bakery" },
+  "tortilla":         { "name": "Tortilla",         "unit": "pcs",  "category": "Bakery" },
   "flour":            { "name": "Flour",            "unit": "g",    "category": "Bakery" },
 
   "lentils":          { "name": "Lentils",          "unit": "g",    "category": "Legumes" },
@@ -41,7 +41,8 @@
   "baking_powder":    { "name": "Baking powder",    "unit": "g",    "category": "Pantry" },
   "soy_sauce":        { "name": "Soy sauce",        "unit": "ml",   "category": "Pantry" },
   "miso_paste":       { "name": "Miso paste",       "unit": "g",    "category": "Pantry" },
-  "coconut_milk":     { "name": "Coconut milk",     "unit": "ml",   "category": "Pantry" },
+  "coconut_milk":     { "name": "Coconut milk",     "unit": "ml",   "category": "Pantry",         "count": { "label": "can", "per_piece": 400 } },
+  "chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "g",    "category": "Pantry",         "count": { "label": "can", "per_piece": 400 } },
   "wakame":           { "name": "Wakame seaweed",   "unit": "g",    "category": "Pantry" },
 
   "black_pepper":     { "name": "Black pepper",     "unit": "g",    "category": "Spices & Oils" },

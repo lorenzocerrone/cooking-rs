@@ -5,9 +5,12 @@ mod format;
 mod models;
 mod pages;
 mod pwa;
+mod quantity;
 mod recipes;
 mod shopping;
 mod state;
+#[cfg(test)]
+mod validate;
 
 use app::App;
 

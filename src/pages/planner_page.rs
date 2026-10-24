@@ -7,7 +7,7 @@ use crate::app::BASE_PATH;
 use crate::components::{
     IconClose, IconInfo, IconPlus, IconShuffle, Modal, RecipeOverview, RecipePicker,
 };
-use crate::format::{asset_url, format_item_quantity, format_text, format_timing};
+use crate::format::{asset_url, format_line_quantity, format_text, format_timing};
 use crate::models::{IngredientCatalog, MealPlan, Recipe, Slot, DAY_NAMES};
 use crate::recipes::load_data;
 use crate::shopping::{aggregate, ShoppingCategory};
@@ -71,9 +71,9 @@ fn PlannerGrid(
         let mut cats = shopping.get();
         if hide_to_taste.get() {
             for cat in cats.iter_mut() {
-                cat.items.retain(|item| item.total.is_some());
+                cat.lines.retain(|line| !line.subtotals.is_empty());
             }
-            cats.retain(|cat| !cat.items.is_empty());
+            cats.retain(|cat| !cat.lines.is_empty());
         }
         cats
     });
@@ -250,16 +250,16 @@ fn ShoppingList(
             } else {
                 cats.into_iter()
                     .map(|cat| {
-                        let cat_name = cat.name.clone();
                         view! {
                             <section>
                                 <h3>{cat.name}</h3>
                                 <ul class="shopping-items">
-                                    {cat.items
+                                    {cat.lines
                                         .into_iter()
-                                        .map(|item| {
-                                            let qty = format_item_quantity(&item);
-                                            let key = format!("{}\u{0}{}", cat_name, item.name);
+                                        .map(|line| {
+                                            let qty = format_line_quantity(&line);
+                                            // Keyed by catalog key: stable across renames.
+                                            let key = line.key.clone();
                                             let key_class = key.clone();
                                             let key_input = key.clone();
                                             let is_checked_class = move || {
@@ -283,7 +283,7 @@ fn ShoppingList(
                                                                     });
                                                             }
                                                         />
-                                                        {format!("{}: {}", item.name, qty)}
+                                                        {format!("{}: {}", line.name, qty)}
                                                     </label>
                                                 </li>
                                             }

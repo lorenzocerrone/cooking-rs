@@ -10,12 +10,12 @@
   "cook_time": 30,
   "ingredients": [
     { "ingredient": "lentils", "amount": 300 },
-    { "ingredient": "onion", "amount": 100 },
-    { "ingredient": "garlic", "amount": 12 },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
     { "ingredient": "tomato", "amount": 200 },
-    { "ingredient": "coconut_milk", "amount": 200 },
+    { "ingredient": "coconut_milk", "amount": 0.5, "unit": "can" },
     { "ingredient": "curry_powder", "amount": 10 },
-    { "ingredient": "olive_oil", "amount": 15 },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
     { "ingredient": "rice", "amount": 240 },
     { "ingredient": "salt" }
   ],

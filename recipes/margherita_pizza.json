@@ -13,7 +13,7 @@
     { "ingredient": "tomato", "amount": 200 },
     { "ingredient": "mozzarella", "amount": 150 },
     { "ingredient": "basil", "amount": 10 },
-    { "ingredient": "olive_oil", "amount": 15 },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
     { "ingredient": "salt" }
   ],
   "steps": [

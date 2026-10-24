@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
 use crate::app::BASE_PATH;
-use crate::format::{asset_url, format_amount, format_timing};
+use crate::format::{asset_url, format_ingredient_amount, format_timing};
 use crate::models::{IngredientCatalog, Recipe};
 
 /// The shared summary body for a recipe: image, description, badges, and the
@@ -57,18 +57,23 @@ pub fn RecipeOverview(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoVi
                         .ingredients
                         .iter()
                         .map(|item| {
-                            let info = catalog.get(&item.ingredient);
-                            let name = info
+                            let name = catalog
+                                .get(&item.ingredient)
                                 .map(|i| i.name.clone())
                                 .unwrap_or_else(|| format!("unknown: {}", item.ingredient));
-                            let amount = match info {
-                                Some(i) => format_amount(item.amount, &i.unit),
-                                None => format_amount(item.amount, ""),
-                            };
+                            let note = item.note.clone();
+                            let amount = format_ingredient_amount(item, &catalog);
+                            let optional = item.optional;
                             view! {
                                 <tr>
-                                    <td>{name}</td>
-                                    <td>{amount}</td>
+                                    <td>
+                                        {name}
+                                        {note.map(|n| view! { <span class="muted">{format!(", {n}")}</span> })}
+                                    </td>
+                                    <td>
+                                        {amount}
+                                        {optional.then(|| view! { <span class="muted">" (optional)"</span> })}
+                                    </td>
                                 </tr>
                             }
                         })
