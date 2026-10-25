@@ -113,7 +113,13 @@ JSON Schemas for both files live in `schema/` and are wired up for VS Code in
 
 ### Adding a recipe
 
-Write a plain-text draft:
+The easy way: in Claude Code in this repo, paste or dictate a recipe, attach a photo
+of a recipe card, or send a link (or `/add-recipe`). The `add-recipe` skill
+(`.claude/skills/add-recipe/`) maps it onto the catalog, runs the scaffolder below,
+shows one preview to confirm, runs the tests, commits, and asks before pushing. It
+also changes existing recipes ("make the carbonara serve 4").
+
+By hand, write a plain-text draft:
 
 ```text
 Lentil Dal

@@ -304,7 +304,10 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
 - **CI:** `.github/workflows/ci.yml` runs on every push and pull request:
   `cargo fmt --all --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` →
   `trunk build` (wasm). A green CI means a deployable tree.
-- **Author:** write a plain-text draft (see `src/scaffold.rs`) and run
+- **Author:** usually through the `add-recipe` Claude skill (`.claude/skills/add-recipe/`:
+  text, photo or link in → draft → scaffolder dry run → one preview → write, `cargo test`,
+  local commit, asks before pushing; also edits existing recipes). By hand: write a
+  plain-text draft (see `src/scaffold.rs`) and run
   `cargo run --bin scaffold -- draft.txt` (`--dry-run` prints, `--force` overwrites). It
   writes `recipes/<id>.json` and a placeholder `images/<id>.svg`, or lists every problem by
   line (unknown ingredients come with a catalog stub to paste) and writes nothing. It sets
@@ -413,6 +416,8 @@ Recorded so the reasoning isn't lost; neither is scheduled or agreed.
     fails any PR touching files outside `recipes/`, `images/` and `ingredients.json`.
   - Links: rewrite steps in its own words, no copied photos, a `source` field shown as
     "Adapted from …".
+  - The `add-recipe` skill (shipped 2026-10-25 for local use) is the skill it would run;
+    the intake around it is still only an idea.
   - Cost: an API key (or subscription token) as a repo secret; roughly cents to under a
     dollar per recipe, with a turn cap.
 
