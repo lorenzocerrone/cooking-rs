@@ -370,32 +370,46 @@ Each milestone ships on its own (CI gate green, deployed, checked live).
    extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
 2. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-3. **Family sync spike.** See "Family sync" below: one Worker + Durable Object, a family
-   link, two operations (add meal, tick item) over a hibernating WebSocket, an offline
-   queue; measure free-tier usage. Its result decides whether full sync follows.
-4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
-### Family sync (decided 2026-10-25, not built)
-For full collaboration without running a server: a **Cloudflare Worker + one Durable
-Object per family**, written in Rust (`workers-rs`) as a second crate sharing `models.rs`.
-- **Access: the link is the key.** A random 128-bit family id in the URL fragment
-  (`#family=…`), no accounts; "new family link" rotates it. Accepted as a fair compromise
-  for low-sensitivity data (meal plans, grocery items, first names).
-- **Edits are operations** (add meal, set servings, tick item, …), applied in order by the
-  Durable Object and broadcast over WebSockets using the **Hibernation API** (a plain
-  always-awake object would use ~80% of the free daily duration on its own).
-  `localStorage` becomes the offline cache and the queue of unsent operations; the
-  URL-is-the-plan mode stays for one-off plans. Grocery ticks may become shared;
-  "at home" stays per device.
-- **Cost:** the free plan (no card; over-limit requests fail, never bill). A family uses
-  well under 1% of the daily request and storage limits.
-- **Security:** validate every operation server-side (known recipe ids, size caps), cap
-  each family's document, gate or rate-limit creating families, allow only the Pages
-  origin; never render user text through `inner_html`; Cloudflare 2FA and a scoped deploy
-  token as a GitHub secret. No end-to-end encryption (the server must validate).
+### Ideas (discussed, not approved)
+Recorded so the reasoning isn't lost; neither is scheduled or agreed.
+
+- **Family sync via Cloudflare** (discussed 2026-10-25). Full collaboration without running
+  a server: a Cloudflare Worker + one Durable Object per family, in Rust (`workers-rs`)
+  sharing `models.rs`.
+  - Access: the link is the key, a random 128-bit family id in the URL fragment
+    (`#family=…`), no accounts; "new family link" rotates it.
+  - Edits as operations (add meal, set servings, tick item, …) applied in order by the
+    Durable Object, broadcast over WebSockets with the **Hibernation API** (an always-awake
+    object would use ~80% of the free daily duration by itself). `localStorage` becomes the
+    offline cache plus the queue of unsent operations; URL-is-the-plan stays for one-off plans.
+  - Cost: the free plan (no card; over-limit requests fail, never bill); a family uses well
+    under 1% of the limits.
+  - Security: validate every operation server-side, cap document size, gate or rate-limit
+    creating families, allow only the Pages origin, never render user text via
+    `inner_html`, Cloudflare 2FA and a scoped deploy token. No end-to-end encryption.
+  - A first step would be a spike: one family, two operations, the offline queue, measured
+    free-tier usage.
+- **Recipes via GitHub issues and a Claude agent** (discussed 2026-10-25). Keeps recipes as
+  reviewed JSON in git.
+  - A "New recipe" issue form (name, author, servings, free text or a source link).
+  - Applying a `recipe:approved` label (only the maintainer can) runs the Claude Code
+    GitHub Action with an `add-recipe` skill in the repo: draft format → `cargo run --bin
+    scaffold` → catalog entries for unknown ingredients → `cargo test` → a PR that closes
+    the issue and lists its assumptions. The maintainer merges; nothing auto-merges.
+  - Submitters limited by `author_association` or a `.github/recipe-authors` list; others
+    are closed politely.
+  - Security (prompt injection from issue text and linked pages): trigger only on the
+    label, narrow tools (edits, scaffold, tests) and token permissions, and a CI check that
+    fails any PR touching files outside `recipes/`, `images/` and `ingredients.json`.
+  - Links: rewrite steps in its own words, no copied photos, a `source` field shown as
+    "Adapted from …".
+  - Cost: an API key (or subscription token) as a repo secret; roughly cents to under a
+    dollar per recipe, with a turn cap.
 
 ### Later, on demand
 - **Real photos** once they exist (hero on the recipe page, list thumbnail).
@@ -409,7 +423,7 @@ Object per family**, written in Rust (`workers-rs`) as a second crate sharing `m
 "Why is this on the list" is done: the grocery row sheet shows the recipes that need it.
 
 ### Non-goals (for now)
-User accounts, a self-run server, server-side rendering, nutrition tracking, in-app
+User accounts, a backend/database, server-side rendering, nutrition tracking, in-app
 recipe editing, and image hosting. The app stays a static, link-shareable SPA.
 
 ---
