@@ -370,10 +370,32 @@ Each milestone ships on its own (CI gate green, deployed, checked live).
    extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
 2. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+3. **Family sync spike.** See "Family sync" below: one Worker + Durable Object, a family
+   link, two operations (add meal, tick item) over a hibernating WebSocket, an offline
+   queue; measure free-tier usage. Its result decides whether full sync follows.
+4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
+
+### Family sync (decided 2026-10-25, not built)
+For full collaboration without running a server: a **Cloudflare Worker + one Durable
+Object per family**, written in Rust (`workers-rs`) as a second crate sharing `models.rs`.
+- **Access: the link is the key.** A random 128-bit family id in the URL fragment
+  (`#family=…`), no accounts; "new family link" rotates it. Accepted as a fair compromise
+  for low-sensitivity data (meal plans, grocery items, first names).
+- **Edits are operations** (add meal, set servings, tick item, …), applied in order by the
+  Durable Object and broadcast over WebSockets using the **Hibernation API** (a plain
+  always-awake object would use ~80% of the free daily duration on its own).
+  `localStorage` becomes the offline cache and the queue of unsent operations; the
+  URL-is-the-plan mode stays for one-off plans. Grocery ticks may become shared;
+  "at home" stays per device.
+- **Cost:** the free plan (no card; over-limit requests fail, never bill). A family uses
+  well under 1% of the daily request and storage limits.
+- **Security:** validate every operation server-side (known recipe ids, size caps), cap
+  each family's document, gate or rate-limit creating families, allow only the Pages
+  origin; never render user text through `inner_html`; Cloudflare 2FA and a scoped deploy
+  token as a GitHub secret. No end-to-end encryption (the server must validate).
 
 ### Later, on demand
 - **Real photos** once they exist (hero on the recipe page, list thumbnail).
@@ -387,7 +409,7 @@ Each milestone ships on its own (CI gate green, deployed, checked live).
 "Why is this on the list" is done: the grocery row sheet shows the recipes that need it.
 
 ### Non-goals (for now)
-User accounts, a backend/database, server-side rendering, nutrition tracking, in-app
+User accounts, a self-run server, server-side rendering, nutrition tracking, in-app
 recipe editing, and image hosting. The app stays a static, link-shareable SPA.
 
 ---
