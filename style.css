@@ -735,24 +735,6 @@ h1 {
 }
 
 /* ---------- Week ---------- */
-.banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding: 10px 12px;
-  border: 1px solid var(--sienna);
-  border-radius: var(--radius);
-  background: var(--sienna-tint);
-  font-size: 14px;
-}
-
-.banner__acts {
-  display: flex;
-  gap: 6px;
-}
-
 .week {
   display: grid;
   gap: 10px;

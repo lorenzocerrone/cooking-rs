@@ -1,9 +1,9 @@
 //! Local persistence boundary.
 //!
-//! The meal plan and the grocery list's check-off state are saved to
-//! `localStorage` on every change, so they survive reloads on this device. The
-//! URL hash (see [`crate::state`]) stays the *sharing* channel: a plan in the
-//! hash wins over the stored one on startup and is then persisted too.
+//! The URL hash (see [`crate::state`]) is the plan: the address bar always
+//! carries it. `localStorage` only remembers the **last plan opened** on this
+//! device, so the home-screen icon (which opens the bare URL) comes back to it,
+//! plus this device's grocery check-off state, which is never shared.
 //!
 //! Everything except the two thin `window` wrappers at the bottom is plain data
 //! and host-testable.
@@ -218,38 +218,12 @@ pub fn decode(raw: &str, today: Date) -> Option<PersistedState> {
     ))
 }
 
-/// What the app starts with.
-#[derive(Clone, Debug, PartialEq)]
-pub struct Startup {
-    /// The active state: the plan shown and edited, plus this device's grocery state.
-    pub state: PersistedState,
-    /// `Some` while **previewing a shared plan**: the device's own plan (or an
-    /// empty plan if it had none), kept aside until the user keeps the shared
-    /// plan or goes back to their own. Nothing is persisted while this is `Some`.
-    pub own_plan: Option<MealPlan>,
-}
-
-/// Startup precedence: a plan in the URL hash (a share link) is shown first, with
-/// the device's own plan set aside; the device's grocery state is always kept.
-/// Without a hash plan, the stored state is used; otherwise an empty plan.
-pub fn resolve_initial(hash: Option<MealPlan>, stored: Option<PersistedState>) -> Startup {
-    match (hash, stored) {
-        (Some(shared), stored) => {
-            let (own, grocery) = stored.map(|s| (s.plan, s.grocery)).unwrap_or_default();
-            Startup {
-                state: PersistedState::new(shared, grocery),
-                own_plan: Some(own),
-            }
-        }
-        (None, Some(stored)) => Startup {
-            state: PersistedState::new(stored.plan, stored.grocery),
-            own_plan: None,
-        },
-        (None, None) => Startup {
-            state: PersistedState::new(MealPlan::default(), GroceryState::default()),
-            own_plan: None,
-        },
-    }
+/// Startup precedence: a plan in the URL hash (a link someone sent, or the
+/// address bar on reload) wins; otherwise the last plan opened on this device;
+/// otherwise an empty plan. The device's grocery state is always kept.
+pub fn resolve_initial(hash: Option<MealPlan>, stored: Option<PersistedState>) -> PersistedState {
+    let (last, grocery) = stored.map(|s| (s.plan, s.grocery)).unwrap_or_default();
+    PersistedState::new(hash.unwrap_or(last), grocery)
 }
 
 /// Read the stored state, if any and if readable (private mode may refuse).
@@ -373,30 +347,25 @@ mod tests {
     }
 
     #[test]
-    fn hash_plan_is_previewed_and_keeps_device_grocery_state() {
+    fn hash_plan_wins_and_device_grocery_state_is_kept() {
         let stored = sample();
         let mut shared = MealPlan::default();
         shared.add_meal(today().add_days(6), "pancakes".into());
 
         let r = resolve_initial(Some(shared.clone()), Some(stored.clone()));
-        assert_eq!(r.state.plan, shared);
-        assert_eq!(r.state.grocery, stored.grocery);
-        assert_eq!(r.state.version, SCHEMA_VERSION);
-        assert_eq!(r.own_plan, Some(stored.plan.clone()));
+        assert_eq!(r.plan, shared);
+        assert_eq!(r.grocery, stored.grocery);
+        assert_eq!(r.version, SCHEMA_VERSION);
 
         let r = resolve_initial(Some(shared.clone()), None);
-        assert_eq!(r.state.plan, shared);
-        assert_eq!(r.state.grocery, GroceryState::default());
-        assert_eq!(r.own_plan, Some(MealPlan::default()));
+        assert_eq!(r.plan, shared);
+        assert_eq!(r.grocery, GroceryState::default());
 
         let r = resolve_initial(None, Some(stored.clone()));
-        assert_eq!(r.state.plan, stored.plan);
-        assert_eq!(r.state.grocery, stored.grocery);
-        assert_eq!(r.own_plan, None);
+        assert_eq!(r, stored);
 
         let r = resolve_initial(None, None);
-        assert_eq!(r.state.plan, MealPlan::default());
-        assert_eq!(r.own_plan, None);
+        assert_eq!(r.plan, MealPlan::default());
     }
 
     #[test]

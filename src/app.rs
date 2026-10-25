@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
+use leptos_router::hooks::use_location;
 use leptos_router::path;
 
 use crate::components::{today, Nav, Toast};
@@ -7,7 +8,7 @@ use crate::date::Date;
 use crate::models::MealPlan;
 use crate::pages::{GroceryPage, PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::recipes::{load_data, AppData};
-use crate::state::{clear_hash, read_hash};
+use crate::state::{read_hash, write_hash};
 use crate::storage::{self, GroceryState, PersistedState};
 
 /// Router base path. Empty for local dev (served at `/`); the deploy workflow sets
@@ -38,11 +39,10 @@ pub type DataResource = Resource<AppData>;
 #[component]
 pub fn App() -> impl IntoView {
     // Shared, app-wide state, provided here so any page can read or update it:
-    // - the meal plan (the planner edits it; recipe pages add to it), persisted
-    //   locally and exported on demand as a `#plan=` share link;
+    // - the meal plan (the planner edits it; recipe pages add to it), kept in
+    //   the address bar as `#plan=` (see `UrlSync`) and remembered locally as
+    //   the last plan opened;
     // - the grocery check-off state, persisted locally only;
-    // - `own_plan`: `Some` while a shared plan is being previewed (the device's
-    //   own plan is set aside and nothing is persisted until the user decides);
     // - today's date, which every date-based view starts from;
     // - a one-line toast message;
     // - the recipe data, loaded once.
@@ -51,23 +51,15 @@ pub fn App() -> impl IntoView {
         read_hash(today.get_untracked()),
         storage::load(today.get_untracked()),
     );
-    let previewing = startup.own_plan.is_some();
-    let plan = RwSignal::new(startup.state.plan);
-    let grocery = RwSignal::new(startup.state.grocery);
-    let own_plan = RwSignal::new(startup.own_plan);
+    let plan = RwSignal::new(startup.plan);
+    let grocery = RwSignal::new(startup.grocery);
     let toast = RwSignal::new(None::<String>);
     let data: DataResource = Resource::new(|| (), |_| async { load_data().await });
     provide_context(plan);
     provide_context(grocery);
-    provide_context(own_plan);
     provide_context(today);
     provide_context(toast);
     provide_context(data);
-
-    // The share link has been read; keep the address bar clean from here on.
-    if previewing {
-        clear_hash();
-    }
 
     // An installed app can stay open across midnight: roll over when it comes
     // back to the foreground, letting the day that passed drop off the plan.
@@ -79,16 +71,14 @@ pub fn App() -> impl IntoView {
         }
     });
 
-    // Persist on every change, except while previewing someone else's plan.
+    // Remember the last plan and the grocery state on every change.
     Effect::new(move |_| {
-        let state = PersistedState::new(plan.get(), grocery.get());
-        if own_plan.with(|o| o.is_none()) {
-            storage::save(&state);
-        }
+        storage::save(&PersistedState::new(plan.get(), grocery.get()));
     });
 
     view! {
         <Router base=BASE_PATH>
+            <UrlSync plan=plan />
             <Nav />
             <main>
                 <Routes fallback=|| view! { <p class="muted">"Page not found."</p> }>
@@ -103,6 +93,24 @@ pub fn App() -> impl IntoView {
     }
 }
 
+/// Keeps the plan in the address bar: rewrites `#plan=` after every plan change
+/// and after every navigation (router links drop the fragment).
+#[component]
+fn UrlSync(plan: RwSignal<MealPlan>) -> impl IntoView {
+    let location = use_location();
+    Effect::new(move |_| {
+        location.pathname.track();
+        location.search.track();
+        plan.track();
+        // The router updates its location signals before it pushes the new
+        // URL; write once the push has happened.
+        set_timeout(
+            move || plan.with_untracked(write_hash),
+            std::time::Duration::ZERO,
+        );
+    });
+}
+
 /// The shared meal plan.
 pub fn use_plan() -> RwSignal<MealPlan> {
     expect_context::<RwSignal<MealPlan>>()
@@ -111,11 +119,6 @@ pub fn use_plan() -> RwSignal<MealPlan> {
 /// The shared grocery state.
 pub fn use_grocery() -> RwSignal<GroceryState> {
     expect_context::<RwSignal<GroceryState>>()
-}
-
-/// The device's own plan while a shared plan is previewed (`None` otherwise).
-pub fn use_own_plan() -> RwSignal<Option<MealPlan>> {
-    expect_context::<RwSignal<Option<MealPlan>>>()
 }
 
 /// Today's date (rolls over when the app returns to the foreground).

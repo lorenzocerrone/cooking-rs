@@ -1,7 +1,9 @@
-//! Shareable state: the meal plan is serialized to JSON, base64-encoded
-//! (URL-safe, no padding) and carried in the URL hash fragment (`#plan=...`) of a
-//! share link. The app reads such a link on startup (see `storage::resolve_initial`)
-//! and produces one on demand (the planner's Share button).
+//! The URL is the plan: the meal plan is serialized to JSON, base64-encoded
+//! (URL-safe, no padding) and kept in the address bar's hash fragment
+//! (`#plan=...`). The app reads it on startup (see `storage::resolve_initial`)
+//! and rewrites it after every change and navigation (see [`write_hash`]), so
+//! bookmarking or sending the current address shares the plan; the planner's
+//! Share button copies the same link.
 //!
 //! The payload is untagged JSON decoded through [`PlanWire`], so all links ever
 //! shared keep decoding: weekday links (from before plans were dated) land on
@@ -53,19 +55,36 @@ pub fn current_share_url(plan: &MealPlan) -> Option<String> {
     share_url(&href, plan)
 }
 
-/// Remove the fragment from the address bar without reloading or adding a
-/// history entry, once a shared plan has been imported.
-pub fn clear_hash() {
+/// The address for `path` + `search` carrying `plan` in the fragment, or no
+/// fragment for an empty plan.
+pub fn hash_url(path: &str, search: &str, plan: &MealPlan) -> Option<String> {
+    if plan.is_empty() {
+        return Some(format!("{path}{search}"));
+    }
+    Some(format!("{path}{search}#{HASH_PREFIX}{}", encode(plan)?))
+}
+
+/// Put `plan` in the address bar without reloading or adding a history entry.
+/// Does nothing when the address already matches.
+pub fn write_hash(plan: &MealPlan) {
     let location = window().location();
-    let (Ok(path), Ok(search)) = (location.pathname(), location.search()) else {
+    let (Ok(path), Ok(search), Ok(hash)) =
+        (location.pathname(), location.search(), location.hash())
+    else {
         return;
     };
+    let Some(url) = hash_url(&path, &search, plan) else {
+        return;
+    };
+    if url == format!("{path}{search}{hash}") {
+        return;
+    }
     if let Ok(history) = window().history() {
-        let _ = history.replace_state_with_url(
-            &leptos::wasm_bindgen::JsValue::NULL,
-            "",
-            Some(&format!("{path}{search}")),
-        );
+        // Keep the router's history state so back/forward keep working.
+        let state = history
+            .state()
+            .unwrap_or(leptos::wasm_bindgen::JsValue::NULL);
+        let _ = history.replace_state_with_url(&state, "", Some(&url));
     }
 }
 
@@ -109,6 +128,22 @@ mod tests {
         let later = decode(&encoded, today().add_days(1)).unwrap();
         assert_eq!(later.meal_count(), 1);
         assert_eq!(later.meal(today().add_days(2), 0).unwrap().recipe, "dal");
+    }
+
+    #[test]
+    fn hash_url_keeps_path_and_query_and_drops_the_fragment_for_an_empty_plan() {
+        let empty = MealPlan::default();
+        assert_eq!(
+            hash_url("/cooking-rs/", "?tag=quick", &empty).unwrap(),
+            "/cooking-rs/?tag=quick"
+        );
+        let mut plan = MealPlan::default();
+        plan.add_meal(today(), "dal".into());
+        let encoded = encode(&plan).unwrap();
+        assert_eq!(
+            hash_url("/cooking-rs/grocery", "", &plan).unwrap(),
+            format!("/cooking-rs/grocery#plan={encoded}")
+        );
     }
 
     #[test]

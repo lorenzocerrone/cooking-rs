@@ -5,7 +5,7 @@ days' meals, and getting the grocery list for it. Written in Rust with
 [Leptos](https://leptos.dev) (CSR) and built with [Trunk](https://trunkrs.dev).
 
 No backend, no database — recipes are plain JSON files embedded at compile time;
-your plan is saved in the browser and shareable as a link.
+the plan lives in the address bar, so sharing it is sending the link.
 
 ## Features
 
@@ -19,9 +19,10 @@ your plan is saved in the browser and shareable as a link.
   shopping unit and summed ("1 onion" + "100 g onion" → 250 g; "3 cloves" → 12 g;
   "2 tbsp" → 30 ml; "2 cans"), grouped by aisle. Tick items off as you shop, mark
   things you have at home, add extras that aren't in a recipe, copy as text.
-- **Saved and shareable** — the plan and your grocery ticks persist in
-  `localStorage`; the Share button copies a link carrying the plan; opening
-  one previews it next to your own plan.
+- **The address is the plan** — every change rewrites the plan into the URL, so
+  bookmarking, copying the address bar or the Share button all give a link with the
+  plan; opening one shows that plan. The browser remembers the last plan (for the
+  home-screen icon) and this phone's grocery ticks.
 - **Validated data** — `cargo test` checks every recipe file parses, ids match
   file names, ingredients exist, units convert, and images are present.
 - **Installable PWA** — `manifest.webmanifest` + service worker (`sw.js`) make the
@@ -185,8 +186,8 @@ src/
   filter.rs         recipe search + cuisine/tag filtering (pure)
   shopping.rs       meal plan -> converted, summed, aisle-grouped grocery lines (pure)
   format.rs         display strings: quantities, rounding, text export (pure)
-  state.rs          meal plan <-> URL hash (share links)
-  storage.rs        meal plan + grocery ticks <-> localStorage
+  state.rs          meal plan <-> URL hash (the address is the plan)
+  storage.rs        last plan + grocery ticks <-> localStorage
   pwa.rs            service-worker registration
   components/       nav, modal, recipe overview, recipe picker, add-to-planner, icons
   pages/            recipes, recipe detail, planner, grocery

@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::{href, notify, use_app_data, use_own_plan, use_plan, use_today};
+use crate::app::{href, notify, use_app_data, use_plan, use_today};
 use crate::components::{rolling_dates, IconPlus, Modal, RecipePicker, Stepper};
 use crate::date::Date;
 use crate::format::{format_day, format_total_time};
@@ -27,7 +27,6 @@ pub fn PlannerPage() -> impl IntoView {
 #[component]
 fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
     let recipes = StoredValue::new(recipes);
-    let own_plan = use_own_plan();
     let today = use_today();
 
     let is_empty = Memo::new(move |_| plan.with(|p| p.is_empty()));
@@ -46,16 +45,6 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
         let _ = window().navigator().clipboard().write_text(&url);
         notify("Link copied");
     };
-    let keep_shared = move |_| {
-        own_plan.set(None);
-        notify("Plan kept");
-    };
-    let back_to_mine = move |_| {
-        if let Some(own) = own_plan.get_untracked() {
-            plan.set(own);
-        }
-        own_plan.set(None);
-    };
     let clear_plan = move |_| {
         if window()
             .confirm_with_message("Clear the whole plan?")
@@ -72,16 +61,6 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
                 "Share"
             </button>
         </header>
-
-        <Show when=move || own_plan.with(|o| o.is_some())>
-            <div class="banner" role="status">
-                <span>"Viewing a shared plan."</span>
-                <span class="banner__acts">
-                    <button type="button" class="btn btn--primary" on:click=keep_shared>"Keep it"</button>
-                    <button type="button" class="btn" on:click=back_to_mine>"Back to mine"</button>
-                </span>
-            </div>
-        </Show>
 
         <div class="week">
             <For each=move || dates.get() key=|date| *date let:date>

@@ -3,8 +3,9 @@
 `cooking-rs` is a fully static, single-page web app for organizing recipes,
 planning the coming days' meals, and producing the grocery list for it. It has **no
 backend and no database**: recipe data lives in JSON files embedded into the
-WebAssembly binary at build time; user state lives in the browser (`localStorage`)
-and, for sharing, in the URL.
+WebAssembly binary at build time; the meal plan lives in the URL (the address bar
+always carries it), and the browser (`localStorage`) remembers the last plan and the
+grocery ticks.
 
 ---
 
@@ -13,8 +14,10 @@ and, for sharing, in the URL.
 - **Statically buildable.** The output is a folder of static files (`dist/`) that any
   static host can serve — currently GitHub Pages.
 - **No server, no database.** Recipes and ingredients are plain JSON checked into the repo.
-- **Local-first, link-shareable.** The meal plan and grocery ticks persist on the device.
-  A "Share" button produces a link carrying the plan in the URL fragment — no accounts.
+- **The URL is the plan.** A family shares a plan by sending the address: the plan is in
+  the URL fragment and rewritten on every change, so a bookmark, the address bar and the
+  Share button all give the same link — no accounts. The device remembers the last plan
+  opened (for the home-screen icon) and its own grocery ticks.
 - **Phone first.** Designed for a phone in the kitchen and in the shop (bottom tab bar,
   bottom sheets, tap-to-tick rows); wider screens get a top bar; the plan is one rolling list of dates everywhere.
 - **Correct grocery math.** Recipes use natural units ("1 onion", "3 cloves", "2 tbsp",
@@ -36,7 +39,7 @@ and, for sharing, in the URL.
 | Data embedding | `include_dir!` / `include_str!` (+ `build.rs` change tracking) |
 | Serialization  | `serde` + `serde_json`                  |
 | Share links    | `base64` (URL-safe) in the URL fragment |
-| Persistence    | `localStorage` via `web-sys`            |
+| Last plan, ticks | `localStorage` via `web-sys`          |
 | Hosting        | GitHub Pages via GitHub Actions         |
 
 ## 3. High-level architecture
@@ -64,8 +67,8 @@ and, for sharing, in the URL.
  │                          └─ Toast                                │
  │                                                                  │
  │  App: one Resource<AppData> (load_data) + MealPlan, GroceryState,│
- │       own_plan (share preview) and toast signals, all in context │
- │       ⇄ localStorage (storage.rs)   share link ⇄ #plan= (state.rs) │
+ │       today and toast signals, all in context                    │
+ │       ⇄ localStorage (storage.rs)  UrlSync: plan ⇄ #plan= (state) │
  │  pwa::setup() ─► registers service worker + manifest             │
  └──────────────────────────────────────────────────────────────────┘
 ```
@@ -106,14 +109,14 @@ src/
   bin/scaffold.rs   Host-only authoring CLI (arguments + file I/O around scaffold.rs).
                     Trunk builds only the app (`data-bin="cooking-rs"` in index.html).
   app.rs            <Router> (reads APP_BASE_PATH at compile time) + <Nav> + routes + <Toast>.
-                    Owns the shared signals (MealPlan, GroceryState, own_plan, today, toast)
-                    and the
+                    Owns the shared signals (MealPlan, GroceryState, today, toast) and the
                     single data Resource (provide_context), seeds them via
-                    storage::resolve_initial, clears an imported #plan= hash, and saves to
-                    localStorage on change (paused while a shared plan is previewed).
+                    storage::resolve_initial and saves to localStorage on change. UrlSync
+                    rewrites #plan= after every plan change and navigation (deferred one
+                    tick: the router pushes the new URL after updating its signals).
                     `today` rolls over on visibilitychange, dropping the day that passed.
                     Exposes BASE_PATH, href() (every in-app link must use it: the router
-                    base applies to matching only), use_plan/use_grocery/use_own_plan/
+                    base applies to matching only), use_plan/use_grocery/
                     use_today/use_app_data and notify().
   date.rs           Date (days since 1970, ISO `YYYY-MM-DD` on the wire): from_ymd/ymd,
                     add_days, days_until, weekday (Monday = 0), next_weekday. No
@@ -153,14 +156,15 @@ src/
                     "Tomorrow", "Mon 27 Oct"), format_range, format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
                     pieces, labels), format_line_quantity, format_text (export), timing.
-  state.rs          Share BOUNDARY. encode/decode(…, today) a MealPlan ⇄ base64 ⇄ `#plan=`;
-                    share_url builds the link, read_hash/clear_hash handle an opened one.
+  state.rs          URL BOUNDARY. encode/decode(…, today) a MealPlan ⇄ base64 ⇄ `#plan=`;
+                    read_hash on startup, hash_url/write_hash (replaceState, no history
+                    entry) after changes, share_url for the Share button.
   storage.rs        Persistence BOUNDARY. PersistedState {version, plan, grocery} ⇄ JSON ⇄
                     localStorage (decode takes today, migrating weekday plans); GroceryState
                     {checked (with amount snapshots), omitted, hide_to_taste, range:
                     GroceryRange {All | Days(n)} with until(plan, today)} + visible()/
-                    remaining(); resolve_initial → Startup
-                    {state, own_plan} (a hash plan is previewed, the own plan set aside);
+                    remaining(); resolve_initial (hash plan, else last plan, else empty;
+                    the device's grocery state always kept);
                     prune_checked (drops a tick only when the line is gone or grew).
   pwa.rs            Registers the service worker + injects the manifest <link> (prod only).
   components/
@@ -181,7 +185,7 @@ src/
     recipes_page.rs       Compact list with search/filter chips; rows link to the recipe.
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
                           tappable steps (not persisted), AddToWeek.
-    planner_page.rs       "Plan": Share button, shared-plan banner, the rolling dates from
+    planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
                           (servings, view, remove), clear.
@@ -200,11 +204,13 @@ src/
   Recipes keep `unit` as text (labels like "clove" need the catalog to resolve); the catalog's
   `unit` is a typed `Unit`. Conversion always targets the ingredient's shopping unit; when
   none exists the amount is kept in its own dimension rather than dropped.
-- **`state.rs` / `storage.rs` — the sharing and persistence boundaries.** Pure encode/decode
-  cores with host tests; the `window` access is a few small wrappers. Startup: a plan in the
-  URL hash (a share link) is **previewed** — the device's own plan is set aside in `own_plan`,
-  nothing is saved, the hash is cleared, and the planner shows a banner with "Keep it" (adopt
-  and resume saving) or "Back to mine" (restore). Without a hash, the stored state loads.
+- **`state.rs` / `storage.rs` — the URL and persistence boundaries.** Pure encode/decode
+  cores with host tests; the `window` access is a few small wrappers. **The URL is the
+  plan**: startup takes the plan from the hash, else the last plan stored on the device, else
+  an empty plan, and `UrlSync` keeps the hash current with `replaceState` (no history
+  entries; an empty plan drops the fragment). Opening someone's link simply shows their plan
+  — the previous one is still in browser history. Grocery state is per device and never in
+  the URL.
   Both payloads are untagged JSON with defaulted fields and backward-compatible decoders, so
   every link ever shared keeps decoding (weekday plans land on their next dates as of
   today, see `PlanWire`); `storage` carries a `version` (now 3) so an older
@@ -261,7 +267,7 @@ also accepts the original `{breakfast, lunch, dinner}` object (slots become list
 lines) or `Custom {name, quantity?}` (free text, shown as typed in the "Other" aisle);
 omitted when empty.
 
-**Persisted state** (localStorage key `cooking-rs.state`) —
+**Persisted state** (localStorage key `cooking-rs.state`; `plan` is the last plan opened) —
 `{ version: 3, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste,
 range: "all" | {"days": n} } }`. The grocery list covers today through `range` (default: the
 last planned day); the nav badge uses the same range. A tick remembers the amounts it was
@@ -334,18 +340,27 @@ is an aisle in `shopping::CATEGORY_ORDER`.
   "next week" dividers; weekday plans and links migrate to their next dates (storage v3);
   grocery range chips (Today · 3 days · 7 days · All planned) shared with the tab badge; a
   tick survives when the amount needed shrinks; "Add to week" lists the same dates.
+- **Phase 9 — The URL is the plan.** For a family sharing one plan: the plan lives in the
+  `#plan=` fragment and is rewritten on every change and navigation, so the address is always
+  shareable; opening a link shows that plan (the preview banner and `own_plan` are gone);
+  `localStorage` keeps the last plan, for the home-screen icon, and the device's grocery state.
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
+1. **Filter sheet.** Search plus a "Filters · N" button opening a sheet with Diet
+   (vegetarian or meat & fish, from the `vegetarian` tag, which validation keeps honest),
+   Author, Cuisine, Time (≤20 / ≤40 min) and Tags; multi-select (any author/cuisine/diet,
+   all tags), option counts, removable chips for the active filters. On the recipes page the
+   filters live in the query string, so they survive opening a recipe and can be shared.
+2. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
    reorder within a day with up/down, and a "Clear plan" sheet with "Meals only" (keeps
    extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
-2. **Live with it.** A week of real planning and one shop on the phone; a fix round
+3. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
 ### Later, on demand
@@ -353,6 +368,7 @@ Each milestone ships on its own (CI gate green, deployed, checked live).
 - **Densities** for volume-measured solids ("1 cup flour", "1 tsp cumin", "1 tbsp honey"),
   a one-arm extension of `to_shopping`. Until then, spices, honey and butter are written in
   grams.
+- **Shorter share links** if they ever get unwieldy (short recipe ids, deflate).
 - **Runtime-fetched recipes**: swap the `recipes.rs` loader to fetch JSON over HTTP so data
   changes don't need a rebuild. The async-first boundary already anticipates this.
 
