@@ -1,6 +1,7 @@
 {
   "id": "chicken_stir_fry",
   "title": "Chicken Stir-Fry",
+  "author": "Claude",
   "servings": 3,
   "image": "images/chicken_stir_fry.svg",
   "description": "Fast wok-fried chicken with crisp broccoli and peppers in a glossy soy-sesame sauce.",

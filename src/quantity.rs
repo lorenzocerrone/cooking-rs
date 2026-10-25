@@ -222,8 +222,7 @@ pub fn to_shopping(q: Quantity, shopping_unit: Unit, count: Option<&CountSpec>) 
 
 /// Is `unit` acceptable for an ingredient with this shopping unit and piece
 /// spec, i.e. will [`to_shopping`] always yield [`Converted::Primary`]?
-/// (Used by the data validation tests.)
-#[cfg(test)]
+/// (Used by the data validation tests and the recipe scaffolder.)
 pub fn is_convertible(unit: Unit, shopping_unit: Unit, count: Option<&CountSpec>) -> bool {
     matches!(
         to_shopping(Quantity::new(1.0, unit), shopping_unit, count),

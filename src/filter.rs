@@ -12,6 +12,8 @@ pub struct RecipeQuery {
     pub cuisine: String,
     /// Exact tag to require, or empty for any.
     pub tag: String,
+    /// Exact author to require, or empty for any.
+    pub author: String,
 }
 
 impl RecipeQuery {
@@ -26,7 +28,9 @@ impl RecipeQuery {
         let cuisine_ok =
             self.cuisine.is_empty() || recipe.cuisine.as_deref() == Some(self.cuisine.as_str());
         let tag_ok = self.tag.is_empty() || recipe.tags.iter().any(|t| t == &self.tag);
-        text_ok && cuisine_ok && tag_ok
+        let author_ok =
+            self.author.is_empty() || recipe.author.as_deref() == Some(self.author.as_str());
+        text_ok && cuisine_ok && tag_ok && author_ok
     }
 }
 
@@ -43,6 +47,11 @@ pub fn available_cuisines(recipes: &[Recipe]) -> Vec<String> {
 /// Sorted, de-duplicated tags present in the recipe set.
 pub fn available_tags(recipes: &[Recipe]) -> Vec<String> {
     sorted_unique(recipes.iter().flat_map(|r| r.tags.iter().cloned()))
+}
+
+/// Sorted, de-duplicated authors present in the recipe set.
+pub fn available_authors(recipes: &[Recipe]) -> Vec<String> {
+    sorted_unique(recipes.iter().filter_map(|r| r.author.clone()))
 }
 
 fn sorted_unique(items: impl Iterator<Item = String>) -> Vec<String> {
@@ -75,6 +84,7 @@ mod tests {
             prep_time: None,
             cook_time: None,
             image: None,
+            author: None,
         }
     }
 
@@ -142,6 +152,26 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(filter(&r, &q2).len(), 2);
+    }
+
+    #[test]
+    fn author_filter_combines_with_the_others() {
+        let mut r = sample();
+        r[0].author = Some("Lorenzo".into());
+        r[1].author = Some("Claude".into());
+        r[2].author = Some("Lorenzo".into());
+        let mine = RecipeQuery {
+            author: "Lorenzo".into(),
+            ..Default::default()
+        };
+        let ids: Vec<&str> = filter(&r, &mine).iter().map(|r| r.id.as_str()).collect();
+        assert_eq!(ids, vec!["carbonara", "oats"]);
+        let mine_quick = RecipeQuery {
+            tag: "quick".into(),
+            ..mine
+        };
+        assert_eq!(filter(&r, &mine_quick).len(), 1);
+        assert_eq!(available_authors(&r), vec!["Claude", "Lorenzo"]);
     }
 
     #[test]

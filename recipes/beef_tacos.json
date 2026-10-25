@@ -1,6 +1,7 @@
 {
   "id": "beef_tacos",
   "title": "Beef Tacos",
+  "author": "Claude",
   "servings": 4,
   "image": "images/beef_tacos.svg",
   "description": "Spiced ground beef in warm tortillas with tomato, onion, and melty cheddar.",

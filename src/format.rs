@@ -390,6 +390,7 @@ mod tests {
             prep_time: Some(10),
             cook_time: Some(15),
             image: None,
+            author: None,
         };
         assert_eq!(total_time(&r), Some(25));
         assert_eq!(format_total_time(&r), Some("25 min".into()));

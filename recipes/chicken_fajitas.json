@@ -1,0 +1,31 @@
+{
+  "id": "chicken_fajitas",
+  "title": "Chicken Fajitas",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/chicken_fajitas.svg",
+  "description": "Spiced chicken strips with charred peppers and onion, wrapped in warm tortillas.",
+  "cuisine": "Mexican",
+  "tags": ["dinner", "quick"],
+  "prep_time": 15,
+  "cook_time": 15,
+  "ingredients": [
+    { "ingredient": "chicken_breast", "amount": 300, "note": "in strips" },
+    { "ingredient": "bell_pepper", "amount": 2, "unit": "pcs", "note": "in strips" },
+    { "ingredient": "red_onion", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "lime", "amount": 1 },
+    { "ingredient": "cumin", "amount": 3 },
+    { "ingredient": "paprika", "amount": 3 },
+    { "ingredient": "vegetable_oil", "amount": 1, "unit": "tbsp" },
+    { "ingredient": "tortilla", "amount": 4 },
+    { "ingredient": "greek_yogurt", "amount": 50, "optional": true },
+    { "ingredient": "cheddar", "amount": 50, "note": "grated", "optional": true },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Toss the chicken with the cumin, paprika, a pinch of salt and half the lime juice.",
+    "Char the peppers and onion in the oil in a very hot pan for 5 minutes and set aside.",
+    "Cook the chicken in the same pan for 5–6 minutes until cooked through, then return the vegetables.",
+    "Warm the tortillas, squeeze over the rest of the lime and serve with yogurt and cheddar."
+  ]
+}

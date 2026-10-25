@@ -1,0 +1,28 @@
+{
+  "id": "egg_fried_rice",
+  "title": "Egg Fried Rice",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/egg_fried_rice.svg",
+  "description": "Day-old rice, eggs and peas tossed in a very hot pan. Best way to use leftover rice.",
+  "cuisine": "Chinese",
+  "tags": ["dinner", "vegetarian", "quick"],
+  "prep_time": 10,
+  "cook_time": 10,
+  "ingredients": [
+    { "ingredient": "rice", "amount": 150, "note": "cooked and cooled (ideally a day old)" },
+    { "ingredient": "egg", "amount": 3, "note": "beaten" },
+    { "ingredient": "peas", "amount": 150, "note": "frozen" },
+    { "ingredient": "scallion", "amount": 3, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "ingredient": "soy_sauce", "amount": 2, "unit": "tbsp" },
+    { "ingredient": "sesame_oil", "amount": 1, "unit": "tsp" },
+    { "ingredient": "vegetable_oil", "amount": 1, "unit": "tbsp" }
+  ],
+  "steps": [
+    "Heat the vegetable oil in a wok or large pan until very hot. Scramble the eggs softly and set aside.",
+    "Fry the garlic and the white parts of the scallions for 30 seconds, then add the peas.",
+    "Add the rice, breaking up clumps, and fry for 3–4 minutes until hot and a little crisp.",
+    "Return the eggs, add the soy sauce and sesame oil, toss, and finish with the scallion greens."
+  ]
+}

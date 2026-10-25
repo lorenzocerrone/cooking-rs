@@ -2,7 +2,7 @@ use leptos::prelude::*;
 
 use crate::app::notify;
 use crate::components::{Modal, RecipeFilters};
-use crate::filter::{available_cuisines, available_tags, filter, RecipeQuery};
+use crate::filter::{available_authors, available_cuisines, available_tags, filter, RecipeQuery};
 use crate::format::format_total_time;
 use crate::models::{MealPlan, Recipe, DAY_NAMES};
 
@@ -18,6 +18,7 @@ pub fn RecipePicker(
 ) -> impl IntoView {
     let cuisines = StoredValue::new(recipes.with_value(|rs| available_cuisines(rs)));
     let tags = StoredValue::new(recipes.with_value(|rs| available_tags(rs)));
+    let authors = StoredValue::new(recipes.with_value(|rs| available_authors(rs)));
     let query = RwSignal::new(RecipeQuery::default());
 
     // Start every opening with a clean search.
@@ -35,7 +36,12 @@ pub fn RecipePicker(
 
     view! {
         <Modal open=open title=title>
-            <RecipeFilters query=query tags=tags.get_value() cuisines=cuisines.get_value() />
+            <RecipeFilters
+                query=query
+                authors=authors.get_value()
+                tags=tags.get_value()
+                cuisines=cuisines.get_value()
+            />
             <div class="pick-list">
                 {move || {
                     let list = filtered();

@@ -81,8 +81,8 @@ quantity          units, dimensions, piece specs, conversions (pure, no deps)
   ↑
 models            domain types (pure)
   ↑
-shopping/filter/  pure LOGIC (aggregation, search, extras parsing) — returns data
-extras
+shopping/filter/  pure LOGIC (aggregation, search, extras parsing, recipe
+extras/scaffold   scaffolding) — returns data
   ↑
 format            pure DISPLAY FORMATTING — turns data into strings (no Leptos)
   ↑
@@ -101,7 +101,10 @@ build.rs            `rerun-if-changed` for recipes/ and the catalog, so adding/r
                     is picked up by `cargo test` and `trunk serve` (include_dir! alone isn't).
 
 src/
-  main.rs           Entry point: panic hook, pwa::setup(), mounts <App> to the body.
+  lib.rs            The crate's modules (`pub mod …`), shared by the two binaries below.
+  main.rs           Wasm entry point: panic hook, pwa::setup(), mounts <App> to the body.
+  bin/scaffold.rs   Host-only authoring CLI (arguments + file I/O around scaffold.rs).
+                    Trunk builds only the app (`data-bin="cooking-rs"` in index.html).
   app.rs            <Router> (reads APP_BASE_PATH at compile time) + <Nav> + routes + <Toast>.
                     Owns the shared signals (MealPlan, GroceryState, own_plan, toast) and the
                     single data Resource (provide_context), seeds them via
@@ -127,10 +130,17 @@ src/
                     ShoppingLines {key, name, count, subtotals (base units, primary first),
                     to_taste, optional, sources, custom_quantities}; catalog extras folded
                     in unscaled, custom extras as `custom:*` lines in the "Other" aisle (last).
-  filter.rs         Pure LOGIC: RecipeQuery + filter()/available_cuisines()/available_tags().
+  filter.rs         Pure LOGIC: RecipeQuery {search, cuisine, tag, author} + filter() and
+                    available_cuisines()/available_tags()/available_authors().
   extras.rs         Pure LOGIC for the free-text extras line: parse_extra ("milk 1 l" →
                     name + quantity), suggest (catalog matches), to_extra (catalog item when
                     the unit converts, otherwise a custom item kept as typed).
+  scaffold.rs       Pure LOGIC for the scaffolder: parse_draft (title, `key: value` headers,
+                    ingredient lines, "Steps") → Recipe; parse_line ("1 red onion", "3 cloves
+                    garlic", "1/2 can coconut milk, note (optional)"; a bare number counts
+                    pieces; units must convert); find_ingredient (key/name, singular/plural,
+                    no guessing); unknown ingredients get extras::suggest hints and a
+                    catalog stub; render_json (house style) and render_svg (placeholder).
   format.rs         Pure DISPLAY FORMATTING (no Leptos): format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
                     pieces, labels), format_line_quantity, format_text (export), timing.
@@ -149,7 +159,8 @@ src/
                       optional title; closes on backdrop/Esc/button.
     toast.rs          One-line confirmation set via app::notify, auto-hides.
     stepper.rs        "− n +" control (servings).
-    recipe_filters.rs Search box + chip row (tags, cuisines) driving a RecipeQuery.
+    recipe_filters.rs Search box + chip row ("by <author>" when there are 2+ authors, tags,
+                      cuisines) driving a RecipeQuery.
     recipe_picker.rs  Recipe picker sheet for a day; appends to the plan.
     add_to_week.rs    "Add to week" button + day sheet (recipe page).
     icons.rs          Inline SVG icons.
@@ -208,7 +219,8 @@ label; absent = shopping unit), `note`, and `optional`. Everything beyond the co
 optional and old files keep parsing; unknown fields are rejected (typos fail validation).
 
 ```json
-{ "id": "lentil_dal", "title": "Lentil Dal", "servings": 4, "image": "images/lentil_dal.svg",
+{ "id": "lentil_dal", "title": "Lentil Dal", "author": "Claude", "servings": 4,
+  "image": "images/lentil_dal.svg",
   "ingredients": [ { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
                    { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
                    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
@@ -236,9 +248,11 @@ A tick remembers the amounts it was made at and is dropped when the plan changes
 omissions are sticky.
 
 **Invariants** (enforced by `src/validate.rs` under `cargo test`): every data file parses;
-recipe `id` equals the file stem and is unique; every ingredient key exists; every unit
+recipe `id` equals the file stem and is unique; every recipe has an `author` ("Claude" marks
+the generated ones, which the recipe filter can then separate from your own); every ingredient key exists; every unit
 resolves and converts into the ingredient's shopping unit; catalog units are base units;
-every recipe image exists on disk.
+every recipe image exists on disk; no step is the scaffolder's `TODO`; every catalog category
+is an aisle in `shopping::CATEGORY_ORDER`.
 
 ## 6. Build, run, deploy
 
@@ -249,6 +263,10 @@ every recipe image exists on disk.
 - **CI:** `.github/workflows/ci.yml` runs on every push and pull request:
   `cargo fmt --all --check` → `cargo clippy --all-targets -- -D warnings` → `cargo test` →
   `trunk build` (wasm). A green CI means a deployable tree.
+- **Author:** write a plain-text draft (see `src/scaffold.rs`) and run
+  `cargo run --bin scaffold -- draft.txt` (`--dry-run` prints, `--force` overwrites). It
+  writes `recipes/<id>.json` and a placeholder `images/<id>.svg`, or lists every problem by
+  line (unknown ingredients come with a catalog stub to paste) and writes nothing.
 - **Static build:** `trunk build --release` → `dist/`.
 - **Deploy:** push to `main` → `.github/workflows/deploy.yml` builds with
   `--public-url /cooking-rs/` and `APP_BASE_PATH=/cooking-rs` (asset base *and* router base
@@ -285,22 +303,51 @@ every recipe image exists on disk.
   and tappable steps; days as meal lists with sheets for picking and editing; grocery rows
   with tap-to-tick and hold-for-options, free-text extras with catalog suggestions; share
   button + shared-plan preview banner; dark mode.
+- **Phase 7 — Content and authoring.** Crate split into lib + app/scaffold binaries; the host
+  scaffolder (draft text → validated recipe JSON + placeholder image); 12 weeknight dinners
+  (25 recipes), Fish and Frozen aisles, aisle and `TODO` validation rules. A required `author`
+  on every recipe ("Claude" for the generated ones) with "by …" filter chips.
 
 ### Next
-- **Reorder meals within a day** and move a meal to another day.
-- **Real photos** (the recipe page has no image until then; `image` stays validated).
-- **"Why is this on the list"** (sources) on a grocery row.
-- **More recipes and catalog coverage** (densities for "1 cup flour" are a one-arm extension
-  of `to_shopping`).
+Each milestone ships on its own (CI gate green, deployed, checked live).
 
-### Later (bigger)
-- **Runtime-fetched recipes** — swap the `recipes.rs` loader to fetch JSON over HTTP so data
+1. **Plan by date, not by weekday.** The plan becomes a map from calendar date to that
+   day's meals, replacing the seven Monday-indexed `days`. The week page shows a rolling
+   list from today, about 14 days ahead, on the phone and on desktop. This covers both
+   habits: planning today plus two or three days, and planning on Saturday for the whole
+   next week. Past dates drop off on their own, so there is no "clear the past" step.
+   - *Model:* dated days in `models.rs`, "today" passed in from the UI layer so the logic
+     stays host-testable. Storage schema v3 and a new share-link shape that carries dates.
+   - *Migration:* stored v2 plans and old `#plan=` links map each weekday to its next
+     date from today, like the slot-to-list migration did.
+   - *Grocery range:* the list covers today through the last planned day by default, with
+     a way to shorten the range (for example "next 3 days"). The page says which dates it
+     covers.
+   - *Add to week:* the recipe page's day sheet lists the same rolling dates.
+   - The desktop 7-column grid and the scroll-to-today effect in `planner_page.rs` go away.
+2. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
+   reorder within a day with up/down, and a "Clear plan" sheet with "Meals only" (keeps
+   extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
+3. **Live with it.** A week of real planning and one shop on the phone; a fix round
+   follows and re-prioritises the polish below.
+4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+   "Clear ticks" for the next shop.
+5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+   fonts so they work offline; bump the cache.
+
+### Later, on demand
+- **Real photos** once they exist (hero on the recipe page, list thumbnail).
+- **Densities** for volume-measured solids ("1 cup flour", "1 tsp cumin", "1 tbsp honey"),
+  a one-arm extension of `to_shopping`. Until then, spices, honey and butter are written in
+  grams.
+- **Runtime-fetched recipes**: swap the `recipes.rs` loader to fetch JSON over HTTP so data
   changes don't need a rebuild. The async-first boundary already anticipates this.
-- **In-app recipe editing** on top of the same validated schema (export/import JSON).
+
+"Why is this on the list" is done: the grocery row sheet shows the recipes that need it.
 
 ### Non-goals (for now)
-User accounts, a backend/database, server-side rendering, nutrition tracking, and image
-hosting. The app stays a static, link-shareable SPA.
+User accounts, a backend/database, server-side rendering, nutrition tracking, in-app
+recipe editing, and image hosting. The app stays a static, link-shareable SPA.
 
 ---
 

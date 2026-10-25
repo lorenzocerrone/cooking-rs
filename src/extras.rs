@@ -40,7 +40,8 @@ fn is_number(token: &str) -> bool {
     parse_number(token).is_some()
 }
 
-fn parse_number(token: &str) -> Option<f64> {
+/// A positive, finite number; a decimal comma is accepted (`"0,5"`).
+pub fn parse_number(token: &str) -> Option<f64> {
     token
         .replace(',', ".")
         .parse::<f64>()

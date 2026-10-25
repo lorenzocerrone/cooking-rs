@@ -1,6 +1,7 @@
 {
   "id": "margherita_pizza",
   "title": "Margherita Pizza",
+  "author": "Claude",
   "servings": 2,
   "image": "images/margherita_pizza.svg",
   "description": "Blistered crust, crushed tomato, milky mozzarella, and fresh basil — the original pizza.",

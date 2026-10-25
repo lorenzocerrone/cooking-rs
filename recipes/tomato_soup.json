@@ -1,6 +1,7 @@
 {
   "id": "tomato_soup",
   "title": "Tomato Soup",
+  "author": "Claude",
   "servings": 4,
   "image": "images/tomato_soup.svg",
   "description": "A simple, comforting tomato soup built on onion, garlic, and a splash of broth.",

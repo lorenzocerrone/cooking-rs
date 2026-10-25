@@ -3,7 +3,7 @@ use leptos_router::components::A;
 
 use crate::app::{href, use_app_data};
 use crate::components::RecipeFilters;
-use crate::filter::{available_cuisines, available_tags, filter, RecipeQuery};
+use crate::filter::{available_authors, available_cuisines, available_tags, filter, RecipeQuery};
 use crate::format::format_total_time;
 use crate::models::Recipe;
 
@@ -24,6 +24,7 @@ pub fn RecipesPage() -> impl IntoView {
 fn RecipeList(recipes: Vec<Recipe>) -> impl IntoView {
     let cuisines = available_cuisines(&recipes);
     let tags = available_tags(&recipes);
+    let authors = available_authors(&recipes);
     let recipes = StoredValue::new(recipes);
     let query = RwSignal::new(RecipeQuery::default());
 
@@ -38,7 +39,7 @@ fn RecipeList(recipes: Vec<Recipe>) -> impl IntoView {
             <h1>"Recipes"</h1>
             <span class="mono muted">{move || filtered.with(|l| l.len())}</span>
         </header>
-        <RecipeFilters query=query tags=tags cuisines=cuisines />
+        <RecipeFilters query=query authors=authors tags=tags cuisines=cuisines />
         <ul class="recipe-list">
             {move || {
                 let list = filtered.get();

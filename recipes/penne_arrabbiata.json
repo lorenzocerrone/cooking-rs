@@ -1,0 +1,29 @@
+{
+  "id": "penne_arrabbiata",
+  "title": "Penne all'Arrabbiata",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/penne_arrabbiata.svg",
+  "description": "\"Angry\" penne: garlic and chili fried in olive oil, simmered with tomatoes. Pantry staples, twenty minutes.",
+  "cuisine": "Italian",
+  "tags": ["dinner", "pasta", "vegetarian", "quick"],
+  "prep_time": 5,
+  "cook_time": 20,
+  "ingredients": [
+    { "ingredient": "short_pasta", "amount": 200, "note": "penne" },
+    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
+    { "ingredient": "garlic", "amount": 3, "unit": "cloves", "note": "thinly sliced" },
+    { "ingredient": "chili_flakes", "amount": 2 },
+    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
+    { "ingredient": "parmesan", "amount": 30, "note": "grated", "optional": true },
+    { "ingredient": "basil", "optional": true },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Put a large pot of salted water on to boil.",
+    "Gently fry the garlic and chili flakes in the olive oil until the garlic is pale gold, about 2 minutes.",
+    "Add the tomatoes and a pinch of salt; simmer for 10–12 minutes until thickened.",
+    "Cook the penne until al dente, drain and toss it in the sauce with a splash of the pasta water.",
+    "Serve with torn basil and parmesan if you like."
+  ]
+}

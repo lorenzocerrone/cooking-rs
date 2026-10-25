@@ -1,0 +1,30 @@
+{
+  "id": "mushroom_risotto",
+  "title": "Mushroom Risotto",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/mushroom_risotto.svg",
+  "description": "Browned mushrooms folded into a creamy parmesan risotto. Worth the stirring.",
+  "cuisine": "Italian",
+  "tags": ["dinner", "vegetarian", "comfort"],
+  "prep_time": 10,
+  "cook_time": 30,
+  "ingredients": [
+    { "ingredient": "arborio_rice", "amount": 160 },
+    { "ingredient": "mushrooms", "amount": 250, "note": "sliced" },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "ingredient": "vegetable_broth", "amount": 750, "note": "kept hot" },
+    { "ingredient": "butter", "amount": 30 },
+    { "ingredient": "parmesan", "amount": 40, "note": "grated" },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
+    { "ingredient": "salt" },
+    { "ingredient": "black_pepper" }
+  ],
+  "steps": [
+    "Brown the mushrooms in the olive oil in a hot pan, season and set aside.",
+    "In the same pan, soften the onion in half the butter, add the garlic and the rice and toast for 2 minutes.",
+    "Add the hot broth a ladle at a time, stirring, until the rice is creamy and just tender (18–20 minutes).",
+    "Fold in the mushrooms, the rest of the butter and the parmesan. Rest for 2 minutes before serving."
+  ]
+}

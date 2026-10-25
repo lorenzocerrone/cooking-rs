@@ -1,0 +1,31 @@
+{
+  "id": "lemon_zucchini_orzo",
+  "title": "Lemon Zucchini Orzo",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/lemon_zucchini_orzo.svg",
+  "description": "Orzo cooked like a risotto with grated zucchini, lemon and parmesan. One pan.",
+  "cuisine": "Greek",
+  "tags": ["dinner", "vegetarian", "quick"],
+  "prep_time": 10,
+  "cook_time": 15,
+  "ingredients": [
+    { "ingredient": "orzo", "amount": 200 },
+    { "ingredient": "zucchini", "amount": 2, "unit": "pcs", "note": "coarsely grated" },
+    { "ingredient": "lemon", "amount": 1, "note": "zest and juice" },
+    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "ingredient": "vegetable_broth", "amount": 500 },
+    { "ingredient": "parmesan", "amount": 40, "note": "grated" },
+    { "ingredient": "butter", "amount": 15 },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
+    { "ingredient": "basil", "optional": true },
+    { "ingredient": "salt" },
+    { "ingredient": "black_pepper" }
+  ],
+  "steps": [
+    "Fry the garlic in the olive oil for a minute, then toast the orzo in it for another minute.",
+    "Add the broth a ladle at a time, stirring, until the orzo is almost tender (about 10 minutes).",
+    "Stir in the zucchini and cook for 3 more minutes.",
+    "Off the heat, stir in the butter, parmesan, lemon zest and juice. Season and top with basil."
+  ]
+}

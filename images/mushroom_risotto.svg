@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360" role="img" aria-label="Mushroom Risotto">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#c1463a"/>
+      <stop offset="1" stop-color="#8f2f27"/>
+    </linearGradient>
+  </defs>
+  <rect width="640" height="360" fill="url(#g)"/>
+  <circle cx="320" cy="135" r="92" fill="#ffffff" opacity="0.10"/>
+  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"><circle cx="320" cy="135" r="44"/><circle cx="320" cy="135" r="24"/><path d="M252 100 v70 M244 100 v22 a8 8 0 0 0 16 0 v-22"/><path d="M388 100 c14 10 14 34 0 42 v28"/></g>
+  <text x="320" y="290" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="38" font-weight="700" fill="#ffffff">Mushroom Risotto</text>
+  <text x="320" y="324" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="20" fill="#ffffff" opacity="0.85">Italian</text>
+</svg>

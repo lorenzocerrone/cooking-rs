@@ -67,6 +67,9 @@ fn RecipeDetail(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
         if !recipe.tags.is_empty() {
             parts.push(recipe.tags.join(", "));
         }
+        if let Some(a) = &recipe.author {
+            parts.push(format!("by {a}"));
+        }
         parts.join(" · ")
     };
     let timing = format_timing(&recipe);

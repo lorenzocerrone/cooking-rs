@@ -1,6 +1,7 @@
 {
   "id": "carbonara",
   "title": "Spaghetti Carbonara",
+  "author": "Claude",
   "servings": 2,
   "image": "images/carbonara.svg",
   "description": "The Roman classic: silky egg-and-pecorino sauce, crisp guanciale, and plenty of black pepper. No cream.",

@@ -5,10 +5,11 @@
   "description": "One recipe file under recipes/. Validated for real by `cargo test` (src/validate.rs); this schema is for editor autocomplete.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["id", "title", "servings", "ingredients", "steps"],
+  "required": ["id", "title", "author", "servings", "ingredients", "steps"],
   "properties": {
     "id": { "type": "string", "pattern": "^[a-z0-9_]+$", "description": "Must equal the file name without .json." },
     "title": { "type": "string", "minLength": 1 },
+    "author": { "type": "string", "minLength": 1, "description": "Who wrote the recipe (\"Claude\" for generated ones); drives the author filter." },
     "servings": { "type": "integer", "minimum": 1 },
     "description": { "type": "string" },
     "cuisine": { "type": "string" },

@@ -16,7 +16,11 @@
         "enum": ["g", "ml", "pcs"],
         "description": "The shopping unit: how the ingredient is bought and summed. Recipes may use any convertible unit."
       },
-      "category": { "type": "string", "minLength": 1, "description": "Shopping aisle, e.g. Produce, Pantry." },
+      "category": {
+        "type": "string",
+        "enum": ["Produce", "Meat", "Fish", "Dairy & Eggs", "Pasta & Grains", "Bakery", "Legumes", "Pantry", "Frozen", "Spices & Oils"],
+        "description": "Shopping aisle; must be one of shopping::CATEGORY_ORDER (checked by cargo test)."
+      },
       "count": {
         "type": "object",
         "additionalProperties": false,

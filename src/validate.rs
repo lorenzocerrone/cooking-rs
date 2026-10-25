@@ -12,6 +12,8 @@ use std::path::Path;
 use crate::models::{IngredientCatalog, Recipe};
 use crate::quantity::{is_convertible, resolve_unit, Unit};
 use crate::recipes::{parse_catalog, recipe_files};
+use crate::scaffold::TODO_STEP;
+use crate::shopping::CATEGORY_ORDER;
 
 fn catalog() -> IngredientCatalog {
     parse_catalog().expect("ingredients.json must parse (see all_data_files_parse)")
@@ -72,11 +74,21 @@ fn recipe_metadata_is_sound() {
         if r.title.trim().is_empty() {
             problems.push(format!("{name}: empty title"));
         }
+        if r.author.as_deref().is_none_or(|a| a.trim().is_empty()) {
+            problems.push(format!(
+                "{name}: missing `author` (who wrote it; \"Claude\" for generated recipes)"
+            ));
+        }
         if r.servings == 0 {
             problems.push(format!("{name}: servings must be >= 1"));
         }
         if r.steps.is_empty() || r.steps.iter().any(|s| s.trim().is_empty()) {
             problems.push(format!("{name}: steps must be non-empty"));
+        }
+        if r.steps.iter().any(|s| s.trim() == TODO_STEP) {
+            problems.push(format!(
+                "{name}: replace the scaffolder's `{TODO_STEP}` step"
+            ));
         }
         if r.ingredients.is_empty() {
             problems.push(format!("{name}: no ingredients"));
@@ -155,8 +167,14 @@ fn catalog_entries_are_sound() {
                 info.unit.as_str()
             ));
         }
-        if info.name.trim().is_empty() || info.category.trim().is_empty() {
-            problems.push(format!("{key}: name and category must be non-empty"));
+        if info.name.trim().is_empty() {
+            problems.push(format!("{key}: name must be non-empty"));
+        }
+        if !CATEGORY_ORDER.contains(&info.category.as_str()) {
+            problems.push(format!(
+                "{key}: category `{}` is not an aisle in shopping::CATEGORY_ORDER",
+                info.category
+            ));
         }
         if let Some(c) = &info.count {
             if c.per_piece.is_some_and(|p| p.is_nan() || p <= 0.0) {

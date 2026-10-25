@@ -1,0 +1,28 @@
+{
+  "id": "black_bean_quesadillas",
+  "title": "Black Bean Quesadillas",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/black_bean_quesadillas.svg",
+  "description": "Crisp tortillas folded around spiced black beans, pepper and melted cheddar.",
+  "cuisine": "Mexican",
+  "tags": ["dinner", "vegetarian", "quick"],
+  "prep_time": 10,
+  "cook_time": 10,
+  "ingredients": [
+    { "ingredient": "tortilla", "amount": 4 },
+    { "ingredient": "black_beans", "amount": 1, "unit": "can", "note": "drained" },
+    { "ingredient": "cheddar", "amount": 100, "note": "grated" },
+    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "finely diced" },
+    { "ingredient": "scallion", "amount": 2, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "cumin", "amount": 3 },
+    { "ingredient": "lime", "amount": 1, "note": "in wedges", "optional": true },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Roughly mash the beans with the cumin and a pinch of salt.",
+    "Spread the beans over half of each tortilla, top with pepper, scallions and cheddar, and fold.",
+    "Cook in a dry pan over medium heat for 2–3 minutes per side until crisp and melted.",
+    "Cut into wedges and serve with lime."
+  ]
+}

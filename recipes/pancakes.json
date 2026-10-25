@@ -1,6 +1,7 @@
 {
   "id": "pancakes",
   "title": "Fluffy Pancakes",
+  "author": "Claude",
   "servings": 2,
   "image": "images/pancakes.svg",
   "description": "Light, fluffy stack of pancakes — weekend breakfast in fifteen minutes.",

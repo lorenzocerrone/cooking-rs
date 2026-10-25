@@ -41,6 +41,11 @@ pub struct Recipe {
     /// Optional image URL/path (image hosting itself is a non-goal).
     #[serde(default)]
     pub image: Option<String>,
+    /// Who wrote the recipe ("Claude" for generated ones), used for filtering.
+    /// Required by the data validation; optional here so a missing field is
+    /// reported by that rule rather than as a parse error.
+    #[serde(default)]
+    pub author: Option<String>,
 }
 
 /// A recipe's reference to a catalog ingredient. `amount: None` means "to taste"

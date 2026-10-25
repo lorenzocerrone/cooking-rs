@@ -1,0 +1,31 @@
+{
+  "id": "chickpea_spinach_curry",
+  "title": "Chickpea & Spinach Curry",
+  "author": "Claude",
+  "servings": 4,
+  "image": "images/chickpea_spinach_curry.svg",
+  "description": "Chickpeas simmered in a spiced tomato and coconut sauce with a lot of spinach wilted in at the end.",
+  "cuisine": "Indian",
+  "tags": ["dinner", "vegetarian", "make-ahead"],
+  "prep_time": 10,
+  "cook_time": 25,
+  "ingredients": [
+    { "ingredient": "chickpeas", "amount": 2, "unit": "cans", "note": "drained" },
+    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
+    { "ingredient": "coconut_milk", "amount": 1, "unit": "can" },
+    { "ingredient": "spinach", "amount": 200 },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "ingredient": "garlic", "amount": 3, "unit": "cloves", "note": "crushed" },
+    { "ingredient": "ginger", "amount": 1, "unit": "thumb", "note": "grated" },
+    { "ingredient": "curry_powder", "amount": 15 },
+    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
+    { "ingredient": "rice", "amount": 240 },
+    { "ingredient": "salt" }
+  ],
+  "steps": [
+    "Start the rice.",
+    "Soften the onion in the oil for 5 minutes, then add the garlic, ginger and curry powder and fry for a minute.",
+    "Add the tomatoes, coconut milk and chickpeas and simmer for 15 minutes.",
+    "Stir in the spinach a handful at a time until wilted, season with salt and serve over the rice."
+  ]
+}

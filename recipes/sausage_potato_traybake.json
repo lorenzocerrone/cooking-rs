@@ -1,0 +1,27 @@
+{
+  "id": "sausage_potato_traybake",
+  "title": "Sausage & Potato Traybake",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/sausage_potato_traybake.svg",
+  "description": "Sausages roasted on one tray with potatoes, pepper, red onion and rosemary. Little washing-up.",
+  "cuisine": "British",
+  "tags": ["dinner", "comfort"],
+  "prep_time": 10,
+  "cook_time": 35,
+  "ingredients": [
+    { "ingredient": "sausage", "amount": 4 },
+    { "ingredient": "potato", "amount": 500, "note": "in chunks" },
+    { "ingredient": "red_onion", "amount": 1, "unit": "pcs", "note": "in wedges" },
+    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "in chunks" },
+    { "ingredient": "rosemary", "amount": 2, "unit": "sprigs" },
+    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
+    { "ingredient": "salt" },
+    { "ingredient": "black_pepper" }
+  ],
+  "steps": [
+    "Heat the oven to 220 °C.",
+    "Toss the potatoes, onion and pepper with the olive oil, rosemary, salt and pepper on a large tray.",
+    "Roast for 15 minutes, then add the sausages and roast for 20 more, turning once, until everything is golden."
+  ]
+}

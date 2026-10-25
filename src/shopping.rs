@@ -16,11 +16,13 @@ use crate::quantity::{resolve_unit, to_shopping, Converted, CountSpec, Dimension
 pub const CATEGORY_ORDER: &[&str] = &[
     "Produce",
     "Meat",
+    "Fish",
     "Dairy & Eggs",
     "Pasta & Grains",
     "Bakery",
     "Legumes",
     "Pantry",
+    "Frozen",
     "Spices & Oils",
 ];
 
@@ -315,6 +317,7 @@ mod tests {
             prep_time: None,
             cook_time: None,
             image: None,
+            author: None,
         }
     }
 

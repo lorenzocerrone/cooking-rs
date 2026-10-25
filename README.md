@@ -11,15 +11,15 @@ your plan is saved in the browser and shareable as a link.
 
 - **Recipes** — every `recipes/*.json` file, with a thumbnail, search, and
   cuisine/tag filters; a quick-view dialog and a full detail page with steps.
-- **Meal planner** — a 7-day × 3-slot (breakfast/lunch/dinner) grid with a
-  searchable recipe picker, per-meal servings, "fill randomly", and "clear week".
+- **Week planner** — each day is a list of meals, added from a searchable picker or a
+  recipe's "Add to week", with per-meal servings and a Share button.
 - **Grocery list** — everything the week needs, converted into each ingredient's
   shopping unit and summed ("1 onion" + "100 g onion" → 250 g; "3 cloves" → 12 g;
   "2 tbsp" → 30 ml; "2 cans"), grouped by aisle. Tick items off as you shop, mark
   things you have at home, add extras that aren't in a recipe, copy as text.
 - **Saved and shareable** — the plan and your grocery ticks persist in
-  `localStorage`; the plan is also mirrored into the URL hash, so copying the
-  address shares it (a shared link takes precedence when opened).
+  `localStorage`; the Share button copies a link carrying the plan; opening
+  one previews it next to your own plan.
 - **Validated data** — `cargo test` checks every recipe file parses, ids match
   file names, ingredients exist, units convert, and images are present.
 - **Installable PWA** — `manifest.webmanifest` + service worker (`sw.js`) make the
@@ -84,6 +84,7 @@ shopping unit. Omit `amount` for "to taste".
 {
   "id": "lentil_dal",
   "title": "Lentil Dal",
+  "author": "Lorenzo",
   "servings": 4,
   "cuisine": "Indian",
   "tags": ["dinner", "vegetarian"],
@@ -107,10 +108,47 @@ JSON Schemas for both files live in `schema/` and are wired up for VS Code in
 
 ### Adding a recipe
 
-1. If it uses an ingredient not yet in `ingredients.json`, add it there first:
-   pick the shopping unit, the aisle, and a `count` if recipes will use pieces.
-2. Add `recipes/<id>.json` with `"id": "<id>"` and an image at `images/<id>.svg`.
-3. Run `cargo test`. The validation suite lists every problem by file and rule.
+Write a plain-text draft:
+
+```text
+Lentil Dal
+author: Lorenzo
+servings: 4
+cuisine: Indian
+tags: dinner, vegetarian
+prep: 10
+cook: 30
+
+300 g lentils
+1 onion, finely chopped
+3 cloves garlic
+1/2 can coconut milk
+chives (optional)
+salt
+
+Steps
+Soften the onion and garlic in olive oil.
+Simmer everything for 25 minutes.
+```
+
+then run the scaffolder and the validation suite:
+
+```sh
+cargo run --bin scaffold -- draft.txt     # --dry-run to print, --force to overwrite
+cargo test
+```
+
+A leading number is the amount. The next word is the unit if it is one
+(`g kg ml l tsp tbsp cup pcs`) or the ingredient's piece label (`cloves`, `can`).
+A bare number counts pieces ("2 onion" is two onions), text after a comma is a
+note, and a line without an amount is "to taste". Every recipe needs an
+`author:` (the bundled ones say "Claude"), and the recipe list gets "by …"
+filter chips as soon as there are two authors. The scaffolder writes
+`recipes/<id>.json` and a placeholder `images/<id>.svg`. If anything is wrong
+(an unknown ingredient, a unit that doesn't convert), it lists every problem by
+line, prints a catalog entry to paste into `ingredients.json` for each unknown
+ingredient, and writes nothing. New catalog entries need an aisle from
+`shopping::CATEGORY_ORDER`.
 
 ## Deploy (GitHub Pages)
 
@@ -133,7 +171,10 @@ images/             per-recipe images (copied into dist/ via index.html)
 schema/             JSON Schemas for the two data files (editor support)
 build.rs            re-runs the build when recipes/ or the catalog change
 src/
-  main.rs           entry point: mounts the app
+  lib.rs            the crate's modules, shared by both binaries
+  main.rs           wasm entry point: mounts the app
+  bin/scaffold.rs   host-only recipe scaffolder (cargo run --bin scaffold)
+  scaffold.rs       draft text -> validated Recipe, JSON + placeholder SVG (pure)
   app.rs            router + nav shell; owns the shared plan + grocery state
   models.rs         Recipe / RecipeIngredient / CatalogIngredient / MealPlan
   quantity.rs       units, dimensions, piece specs, conversions (pure)

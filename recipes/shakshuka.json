@@ -1,0 +1,31 @@
+{
+  "id": "shakshuka",
+  "title": "Shakshuka",
+  "author": "Claude",
+  "servings": 2,
+  "image": "images/shakshuka.svg",
+  "description": "Eggs poached in a smoky pepper and tomato sauce. Bring bread for the pan.",
+  "cuisine": "Middle Eastern",
+  "tags": ["dinner", "vegetarian", "quick"],
+  "prep_time": 10,
+  "cook_time": 20,
+  "ingredients": [
+    { "ingredient": "egg", "amount": 4 },
+    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
+    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "ingredient": "cumin", "amount": 3 },
+    { "ingredient": "paprika", "amount": 3 },
+    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
+    { "ingredient": "feta", "amount": 50, "note": "crumbled", "optional": true },
+    { "ingredient": "salt" },
+    { "ingredient": "black_pepper" }
+  ],
+  "steps": [
+    "Soften the onion and pepper in the olive oil for 8 minutes.",
+    "Add the garlic, cumin and paprika and fry for a minute, then add the tomatoes and simmer for 5 minutes. Season.",
+    "Make four hollows, crack an egg into each, cover and cook until the whites are set (5–7 minutes).",
+    "Scatter over the feta and serve from the pan."
+  ]
+}
