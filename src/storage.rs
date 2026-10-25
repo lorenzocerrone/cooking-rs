@@ -134,6 +134,11 @@ impl GroceryState {
         }
     }
 
+    /// Untick every line (for a new plan); at-home items stay.
+    pub fn clear_checked(&mut self) {
+        self.checked.clear();
+    }
+
     pub fn is_omitted(&self, key: &str) -> bool {
         self.omitted.contains(key)
     }
@@ -437,6 +442,20 @@ mod tests {
         assert!(g.is_checked("salt"));
         assert!(g.is_omitted("salt"));
         assert!(!g.prune_checked(&current), "second pass is a no-op");
+    }
+
+    #[test]
+    fn clear_checked_keeps_at_home_and_settings() {
+        let mut g = GroceryState {
+            hide_to_taste: true,
+            ..Default::default()
+        };
+        g.toggle_checked(&line("onion", &[(Dimension::Mass, 1.0)]));
+        g.toggle_omitted("salt");
+        g.clear_checked();
+        assert!(!g.is_checked("onion"));
+        assert!(g.is_omitted("salt"));
+        assert!(g.hide_to_taste);
     }
 
     #[test]

@@ -2,6 +2,7 @@ use crate::date::Date;
 use crate::models::MealPlan;
 
 mod add_to_week;
+mod day_pick;
 mod icons;
 mod modal;
 mod nav;
@@ -11,6 +12,7 @@ mod stepper;
 mod toast;
 
 pub use add_to_week::AddToWeek;
+pub use day_pick::DayPick;
 pub use icons::{IconBack, IconBook, IconCalendar, IconCart, IconClose, IconPlus};
 pub use modal::Modal;
 pub use nav::Nav;

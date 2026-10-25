@@ -1,10 +1,10 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
 
-use crate::app::{href, notify, use_app_data, use_plan, use_today};
-use crate::components::{rolling_dates, IconPlus, Modal, RecipePicker, Stepper};
+use crate::app::{href, notify, use_app_data, use_grocery, use_plan, use_today};
+use crate::components::{rolling_dates, DayPick, IconPlus, Modal, RecipePicker, Stepper};
 use crate::date::Date;
-use crate::format::{format_day, format_total_time};
+use crate::format::{format_day, format_day_inline, format_total_time};
 use crate::models::{MealPlan, Recipe};
 use crate::state::current_share_url;
 
@@ -45,14 +45,7 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
         let _ = window().navigator().clipboard().write_text(&url);
         notify("Link copied");
     };
-    let clear_plan = move |_| {
-        if window()
-            .confirm_with_message("Clear the whole plan?")
-            .unwrap_or(false)
-        {
-            plan.set(MealPlan::default());
-        }
-    };
+    let clear_open = RwSignal::new(false);
 
     view! {
         <header class="page-head">
@@ -86,7 +79,7 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
             <button
                 type="button"
                 class="btn btn--quiet"
-                on:click=clear_plan
+                on:click=move |_| clear_open.set(true)
                 prop:disabled=move || is_empty.get()
             >
                 "Clear plan"
@@ -95,6 +88,7 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
 
         <RecipePicker open=picker_open day=picker_day recipes=recipes plan=plan />
         <MealSheet open=sheet_open target=sheet_target recipes=recipes plan=plan />
+        <ClearSheet open=clear_open plan=plan />
     }
 }
 
@@ -177,7 +171,15 @@ fn DayCard(
     }
 }
 
-/// Sheet for one planned meal: servings, link to the recipe, remove.
+/// What the meal sheet shows: the meal's controls, or the days to move it to.
+#[derive(Clone, Copy, PartialEq)]
+enum SheetMode {
+    Edit,
+    Move,
+}
+
+/// Sheet for one planned meal: servings, order within the day, move to another
+/// day, link to the recipe, remove.
 #[component]
 fn MealSheet(
     open: RwSignal<bool>,
@@ -185,6 +187,15 @@ fn MealSheet(
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
 ) -> impl IntoView {
+    let today = use_today();
+    let mode = RwSignal::new(SheetMode::Edit);
+    // Every opening starts on the meal's controls.
+    Effect::new(move |_| {
+        if open.get() {
+            mode.set(SheetMode::Edit);
+        }
+    });
+
     // The recipe behind the targeted meal (None once it has been removed).
     let recipe = Memo::new(move |_| {
         let (day, idx) = target.get();
@@ -192,8 +203,13 @@ fn MealSheet(
         recipes.with_value(|rs| rs.iter().find(|r| r.id == id).cloned())
     });
     let title = Signal::derive(move || {
-        recipe.with(|r| r.as_ref().map(|r| r.title.clone()).unwrap_or_default())
+        let name = recipe.with(|r| r.as_ref().map(|r| r.title.clone()).unwrap_or_default());
+        match mode.get() {
+            SheetMode::Edit => name,
+            SheetMode::Move => format!("Move “{name}” to…"),
+        }
     });
+    let day = Signal::derive(move || target.get().0);
     let servings = Signal::derive(move || {
         let (day, idx) = target.get();
         let default = recipe.with(|r| r.as_ref().map(|r| r.servings).unwrap_or(1));
@@ -207,6 +223,32 @@ fn MealSheet(
         let value = (v != default).then_some(v);
         plan.update(|p| p.set_servings(day, idx, value));
     });
+    let day_len = move || plan.with(|p| p.day(day.get()).len());
+    // Swap with the neighbour `step` away and keep following the meal.
+    let shift = move |step: isize| {
+        let (day, idx) = target.get_untracked();
+        let Some(to) = idx.checked_add_signed(step) else {
+            return;
+        };
+        let mut swapped = false;
+        plan.update(|p| swapped = p.swap_meals(day, idx, to));
+        if swapped {
+            target.set((day, to));
+        }
+    };
+    let move_to = Callback::new(move |to: Date| {
+        let (day, idx) = target.get_untracked();
+        let mut moved = None;
+        plan.update(|p| moved = p.move_meal(day, idx, to));
+        if let Some(new_idx) = moved {
+            target.set((to, new_idx));
+            open.set(false);
+            notify(format!(
+                "Moved to {}",
+                format_day_inline(to, today.get_untracked())
+            ));
+        }
+    });
     let remove = move |_| {
         let (day, idx) = target.get_untracked();
         plan.update(|p| p.remove_meal(day, idx));
@@ -215,30 +257,116 @@ fn MealSheet(
 
     view! {
         <Modal open=open title=title>
-            {move || {
-                recipe
-                    .get()
-                    .map(|r| {
-                        let link = href(&format!("/recipe/{}", r.id));
-                        let meta = format_total_time(&r).unwrap_or_default();
-                        view! {
-                            <div class="meal-sheet">
-                                <div class="recipe__scale">
-                                    <Stepper value=servings label="servings" on_change=set_servings />
-                                    <span class="mono muted">{meta}</span>
+            <Show
+                when=move || mode.get() == SheetMode::Edit
+                fallback=move || view! { <DayPick on_pick=move_to exclude=day /> }
+            >
+                {move || {
+                    recipe
+                        .get()
+                        .map(|r| {
+                            let link = href(&format!("/recipe/{}", r.id));
+                            let meta = format_total_time(&r).unwrap_or_default();
+                            view! {
+                                <div class="meal-sheet">
+                                    <div class="recipe__scale">
+                                        <Stepper
+                                            value=servings
+                                            label="servings"
+                                            on_change=set_servings
+                                        />
+                                        <span class="mono muted">{meta}</span>
+                                    </div>
+                                    <Show when=move || { day_len() > 1 }>
+                                        <div class="meal-sheet__order">
+                                            <button
+                                                type="button"
+                                                class="btn"
+                                                on:click=move |_| shift(-1)
+                                                prop:disabled=move || target.get().1 == 0
+                                            >
+                                                "↑ Earlier"
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="btn"
+                                                on:click=move |_| shift(1)
+                                                prop:disabled=move || {
+                                                    target.get().1 + 1 >= day_len()
+                                                }
+                                            >
+                                                "↓ Later"
+                                            </button>
+                                        </div>
+                                    </Show>
+                                    <div class="meal-sheet__acts">
+                                        <button
+                                            type="button"
+                                            class="btn"
+                                            on:click=move |_| mode.set(SheetMode::Move)
+                                        >
+                                            "Move to…"
+                                        </button>
+                                        <A
+                                            href=link
+                                            attr:class="btn"
+                                            on:click=move |_| open.set(false)
+                                        >
+                                            "View recipe"
+                                        </A>
+                                        <button
+                                            type="button"
+                                            class="btn btn--danger"
+                                            on:click=remove
+                                        >
+                                            "Remove"
+                                        </button>
+                                    </div>
                                 </div>
-                                <div class="meal-sheet__acts">
-                                    <A href=link attr:class="btn" on:click=move |_| open.set(false)>
-                                        "View recipe"
-                                    </A>
-                                    <button type="button" class="btn btn--danger" on:click=remove>
-                                        "Remove"
-                                    </button>
-                                </div>
-                            </div>
-                        }
-                    })
-            }}
+                            }
+                        })
+                }}
+            </Show>
+        </Modal>
+    }
+}
+
+/// "Clear plan" sheet: drop the meals only (extras stay) or everything. Either
+/// way the grocery ticks go; at-home items always stay.
+#[component]
+fn ClearSheet(open: RwSignal<bool>, plan: RwSignal<MealPlan>) -> impl IntoView {
+    let grocery = use_grocery();
+    let no_meals = move || plan.with(|p| p.meal_count() == 0);
+    let clear = move |everything: bool| {
+        plan.update(|p| {
+            if everything {
+                *p = MealPlan::default();
+            } else {
+                p.clear_meals();
+            }
+        });
+        grocery.update(|g| g.clear_checked());
+        open.set(false);
+        notify("Plan cleared");
+    };
+
+    view! {
+        <Modal open=open title="Clear the plan?">
+            <div class="clear-sheet">
+                <button
+                    type="button"
+                    class="btn"
+                    on:click=move |_| clear(false)
+                    prop:disabled=no_meals
+                >
+                    "Meals only"
+                </button>
+                <p class="muted">"Keeps the extras and the items you have at home."</p>
+                <button type="button" class="btn btn--danger" on:click=move |_| clear(true)>
+                    "Everything"
+                </button>
+                <p class="muted">"Meals and extras. Items you have at home stay hidden."</p>
+            </div>
         </Modal>
     }
 }

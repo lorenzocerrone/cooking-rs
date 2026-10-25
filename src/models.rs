@@ -324,6 +324,41 @@ impl MealPlan {
         }
     }
 
+    /// Move the `idx`-th meal of `from` to the end of `to`, keeping its
+    /// servings; a day left without meals is dropped. Returns the meal's index
+    /// in `to`, or `None` (nothing changed) for an index that holds no meal or
+    /// when `from == to`.
+    pub fn move_meal(&mut self, from: Date, idx: usize, to: Date) -> Option<usize> {
+        if from == to || self.meal(from, idx).is_none() {
+            return None;
+        }
+        let d = self.dates.get_mut(&from)?;
+        let entry = d.meals.remove(idx);
+        if d.meals.is_empty() {
+            self.dates.remove(&from);
+        }
+        let meals = &mut self.dates.entry(to).or_default().meals;
+        meals.push(entry);
+        Some(meals.len() - 1)
+    }
+
+    /// Swap two meals of a day. Returns false (nothing changed) when either
+    /// index holds no meal.
+    pub fn swap_meals(&mut self, date: Date, a: usize, b: usize) -> bool {
+        match self.dates.get_mut(&date) {
+            Some(d) if a < d.meals.len() && b < d.meals.len() => {
+                d.meals.swap(a, b);
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Remove every meal, keeping the extras.
+    pub fn clear_meals(&mut self) {
+        self.dates.clear();
+    }
+
     /// Set (or clear, with `None`) the custom servings of a meal. Does nothing
     /// for an index that holds no meal.
     pub fn set_servings(&mut self, date: Date, idx: usize, servings: Option<u32>) {
@@ -458,6 +493,57 @@ mod tests {
         assert_eq!(decode(&json), plan);
         assert_eq!(serde_json::to_string(&MealPlan::default()).unwrap(), "{}");
         assert_eq!(decode("{}"), MealPlan::default());
+    }
+
+    #[test]
+    fn move_meal_keeps_servings_lands_last_and_drops_an_emptied_day() {
+        let mut plan = MealPlan::default();
+        let (from, to) = (today(), today().add_days(3));
+        plan.add_meal(from, "dal".into());
+        plan.set_servings(from, 0, Some(6));
+        plan.add_meal(to, "soup".into());
+        assert_eq!(plan.move_meal(from, 0, to), Some(1));
+        assert!(plan.day(from).is_empty());
+        assert!(!plan.dates.contains_key(&from));
+        assert_eq!(plan.meal(to, 1).unwrap().recipe, "dal");
+        assert_eq!(plan.meal(to, 1).unwrap().servings, Some(6));
+    }
+
+    #[test]
+    fn move_meal_ignores_same_day_and_missing_meals() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(today(), "dal".into());
+        let before = plan.clone();
+        assert_eq!(plan.move_meal(today(), 0, today()), None);
+        assert_eq!(plan.move_meal(today(), 1, today().add_days(1)), None);
+        assert_eq!(plan.move_meal(today().add_days(2), 0, today()), None);
+        assert_eq!(plan, before);
+    }
+
+    #[test]
+    fn swap_meals_reorders_within_bounds_only() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(today(), "dal".into());
+        plan.add_meal(today(), "soup".into());
+        assert!(plan.swap_meals(today(), 0, 1));
+        assert_eq!(plan.meal(today(), 0).unwrap().recipe, "soup");
+        assert!(!plan.swap_meals(today(), 1, 2));
+        assert!(!plan.swap_meals(today().add_days(1), 0, 1));
+        assert_eq!(plan.meal(today(), 1).unwrap().recipe, "dal");
+    }
+
+    #[test]
+    fn clear_meals_keeps_extras() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(today(), "dal".into());
+        plan.extras.push(Extra::Custom {
+            name: "Bread".into(),
+            quantity: None,
+        });
+        plan.clear_meals();
+        assert_eq!(plan.meal_count(), 0);
+        assert_eq!(plan.extras.len(), 1);
+        assert!(!plan.is_empty());
     }
 
     #[test]

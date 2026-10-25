@@ -925,6 +925,23 @@ h1 {
   gap: 8px;
 }
 
+.meal-sheet__order {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.clear-sheet {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 4px;
+}
+
+.clear-sheet p {
+  margin: 0 0 10px;
+  font-size: 13px;
+}
+
 /* ---------- Grocery ---------- */
 .aisle {
   display: grid;

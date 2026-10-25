@@ -184,7 +184,9 @@ src/
                       2+ authors, Cuisine, Time, Tags; option counts; Clear / Show N), or
                       `inline` sections inside the picker (no sheet on a sheet).
     recipe_picker.rs  Recipe picker sheet for a day; appends to the plan.
-    add_to_week.rs    "Add to week" button + sheet of the rolling dates (recipe page).
+    add_to_week.rs    "Add to week" button + a DayPick sheet (recipe page).
+    day_pick.rs       DayPick: the rolling dates with meal counts, one tap picks a day
+                      (Add to week, moving a meal; can leave out one day).
     icons.rs          Inline SVG icons.
     mod.rs            also today() (local browser date) and rolling_dates(today, plan)
                       (14 days from today, or through the last planned day).
@@ -197,7 +199,8 @@ src/
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
-                          (servings, view, remove), clear.
+                          (servings, earlier/later within the day, move to another day,
+                          view, remove), "Clear plan" sheet (meals only / everything).
     grocery_page.rs       Range chips (Today · 3 days · 7 days · All planned) and the dates
                           covered in the summary; aisles with tap-to-tick rows (ticked sink); holding a row opens its
                           sheet ("needed for …", "I have it at home"); at-home chips,
@@ -361,18 +364,20 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   all tags), per-value counts, removable chips for the active filters; inline in the picker.
   On the recipes page the filters live in the query string, so they survive opening a recipe
   and a filtered list can be sent.
+- **Phase 11 — Meal editing.** The meal sheet gains ↑ Earlier / ↓ Later (on days with 2+
+  meals) and "Move to…", which swaps the sheet to the shared day list (`DayPick`, also
+  behind "Add to week") and keeps the meal's servings. "Clear plan" is a sheet instead of
+  `window.confirm`: "Meals only" keeps the extras, "Everything" drops them too; both clear
+  the grocery ticks and keep the at-home items.
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
-   reorder within a day with up/down, and a "Clear plan" sheet with "Meals only" (keeps
-   extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
-2. **Live with it.** A week of real planning and one shop on the phone; a fix round
+1. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+2. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+3. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
 ### Ideas (discussed, not approved)
