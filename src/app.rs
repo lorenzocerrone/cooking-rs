@@ -2,7 +2,8 @@ use leptos::prelude::*;
 use leptos_router::components::{Route, Router, Routes};
 use leptos_router::path;
 
-use crate::components::{Nav, Toast};
+use crate::components::{today, Nav, Toast};
+use crate::date::Date;
 use crate::models::MealPlan;
 use crate::pages::{GroceryPage, PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::recipes::{load_data, AppData};
@@ -42,9 +43,14 @@ pub fn App() -> impl IntoView {
     // - the grocery check-off state, persisted locally only;
     // - `own_plan`: `Some` while a shared plan is being previewed (the device's
     //   own plan is set aside and nothing is persisted until the user decides);
+    // - today's date, which every date-based view starts from;
     // - a one-line toast message;
     // - the recipe data, loaded once.
-    let startup = storage::resolve_initial(read_hash(), storage::load());
+    let today = RwSignal::new(today());
+    let startup = storage::resolve_initial(
+        read_hash(today.get_untracked()),
+        storage::load(today.get_untracked()),
+    );
     let previewing = startup.own_plan.is_some();
     let plan = RwSignal::new(startup.state.plan);
     let grocery = RwSignal::new(startup.state.grocery);
@@ -54,6 +60,7 @@ pub fn App() -> impl IntoView {
     provide_context(plan);
     provide_context(grocery);
     provide_context(own_plan);
+    provide_context(today);
     provide_context(toast);
     provide_context(data);
 
@@ -61,6 +68,16 @@ pub fn App() -> impl IntoView {
     if previewing {
         clear_hash();
     }
+
+    // An installed app can stay open across midnight: roll over when it comes
+    // back to the foreground, letting the day that passed drop off the plan.
+    let _ = window_event_listener(leptos::ev::visibilitychange, move |_| {
+        let now = crate::components::today();
+        if now != today.get_untracked() {
+            today.set(now);
+            plan.update(|p| p.drop_before(now));
+        }
+    });
 
     // Persist on every change, except while previewing someone else's plan.
     Effect::new(move |_| {
@@ -99,6 +116,11 @@ pub fn use_grocery() -> RwSignal<GroceryState> {
 /// The device's own plan while a shared plan is previewed (`None` otherwise).
 pub fn use_own_plan() -> RwSignal<Option<MealPlan>> {
     expect_context::<RwSignal<Option<MealPlan>>>()
+}
+
+/// Today's date (rolls over when the app returns to the foreground).
+pub fn use_today() -> RwSignal<Date> {
+    expect_context::<RwSignal<Date>>()
 }
 
 /// Show a short confirmation message ("Link copied").

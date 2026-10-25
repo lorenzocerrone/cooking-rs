@@ -4,16 +4,16 @@ use std::time::Duration;
 
 use web_sys::PointerEvent;
 
-use crate::app::{href, notify, use_app_data, use_grocery, use_plan};
+use crate::app::{href, notify, use_app_data, use_grocery, use_plan, use_today};
 use crate::components::{IconClose, Modal};
 use crate::extras::{parse_extra, suggest, to_extra};
-use crate::format::{format_ingredient_amount, format_line_quantity, format_text};
+use crate::format::{format_ingredient_amount, format_line_quantity, format_range, format_text};
 use crate::models::{Extra, IngredientCatalog, MealPlan, Recipe};
 use crate::shopping::{aggregate, ShoppingCategory, ShoppingLine};
-use crate::storage::GroceryState;
+use crate::storage::{GroceryRange, GroceryState};
 
-/// Grocery list: everything the week's meals (plus any extras) need, summed in
-/// shopping units and grouped by aisle. Ticks and "have it at home" omissions are
+/// Grocery list: everything the planned meals from today through the chosen
+/// range (plus any extras) need, summed in shopping units and grouped by aisle. Ticks and "have it at home" omissions are
 /// persisted per device (see `crate::storage`).
 #[component]
 pub fn GroceryPage() -> impl IntoView {
@@ -39,10 +39,18 @@ fn GroceryList(
     let recipes = StoredValue::new(recipes);
     let catalog = StoredValue::new(catalog);
     let grocery = use_grocery();
+    let today = use_today();
+
+    // The days covered: today through the range's end.
+    let until = Memo::new(move |_| {
+        let range = grocery.with(|g| g.range);
+        plan.with(|p| range.until(p, today.get()))
+    });
 
     // Live shopping list derived from the current plan.
     let shopping = Memo::new(move |_| {
-        recipes.with_value(|r| catalog.with_value(|c| aggregate(&plan.get(), r, c)))
+        let (from, to) = (today.get(), until.get());
+        plan.with(|p| recipes.with_value(|r| catalog.with_value(|c| aggregate(p, from, to, r, c))))
     });
 
     // Forget ticks for lines that disappeared or changed amount.
@@ -58,7 +66,7 @@ fn GroceryList(
     let visible = Memo::new(move |_| grocery.with(|g| g.visible(&shopping.get())));
     let total = move || visible.with(|v| v.iter().map(|c| c.lines.len()).sum::<usize>());
     let remaining = move || grocery.with(|g| g.remaining(&shopping.get()));
-    let meals = move || plan.with(|p| p.meal_count());
+    let meals = move || plan.with(|p| p.entries_in(today.get(), until.get()).count());
 
     let copy_list = move |_| {
         let text = format_text(&visible.get());
@@ -82,10 +90,33 @@ fn GroceryList(
                         1 => "1 meal".to_string(),
                         n => format!("{n} meals"),
                     };
-                    format!("{} of {t} left to buy · {meals} · tap to tick, hold for more", remaining())
+                    let days = format_range(today.get(), until.get(), today.get());
+                    format!(
+                        "{} of {t} left to buy · {days} · {meals} · tap to tick, hold for more",
+                        remaining()
+                    )
                 }
             }}
         </p>
+        <div class="chips" role="group" aria-label="Days covered">
+            {GroceryRange::PRESETS
+                .into_iter()
+                .map(|(range, label)| {
+                    let active = move || grocery.with(|g| g.range == range);
+                    view! {
+                        <button
+                            type="button"
+                            class="chip"
+                            class:chip--on=active
+                            aria-pressed=move || active().to_string()
+                            on:click=move |_| grocery.update(|g| g.range = range)
+                        >
+                            {label}
+                        </button>
+                    }
+                })
+                .collect_view()}
+        </div>
 
         <Show
             when=move || total() != 0
@@ -93,7 +124,7 @@ fn GroceryList(
                 view! {
                     <p class="muted empty">
                         "Add meals to "
-                        <A href=href("/planner")>"the week"</A>
+                        <A href=href("/planner")>"the plan"</A>
                         " or type an extra below."
                     </p>
                 }

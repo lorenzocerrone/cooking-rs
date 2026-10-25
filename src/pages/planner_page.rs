@@ -1,15 +1,17 @@
 use leptos::prelude::*;
 use leptos_router::components::A;
-use web_sys::{ScrollIntoViewOptions, ScrollLogicalPosition};
 
-use crate::app::{href, notify, use_app_data, use_own_plan, use_plan};
-use crate::components::{today_index, IconPlus, Modal, RecipePicker, Stepper};
-use crate::format::format_total_time;
-use crate::models::{MealPlan, Recipe, DAY_NAMES};
+use crate::app::{href, notify, use_app_data, use_own_plan, use_plan, use_today};
+use crate::components::{rolling_dates, IconPlus, Modal, RecipePicker, Stepper};
+use crate::date::Date;
+use crate::format::{format_day, format_total_time};
+use crate::models::{MealPlan, Recipe};
 use crate::state::current_share_url;
 
-/// The week: seven day cards, each a list of meals plus an "Add a meal" row.
-/// State is the shared meal plan (persisted by `App`).
+/// The plan: the coming days from today (see [`rolling_dates`]). Today and days
+/// with meals are cards (meal rows plus "Add a meal"); other days are one thin
+/// row; a divider marks each new week. State is the shared meal plan
+/// (persisted by `App`).
 #[component]
 pub fn PlannerPage() -> impl IntoView {
     let plan = use_plan();
@@ -26,15 +28,16 @@ pub fn PlannerPage() -> impl IntoView {
 fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
     let recipes = StoredValue::new(recipes);
     let own_plan = use_own_plan();
-    let today = today_index();
+    let today = use_today();
 
     let is_empty = Memo::new(move |_| plan.with(|p| p.is_empty()));
+    let dates = Memo::new(move |_| plan.with(|p| rolling_dates(today.get(), p)));
 
-    // One picker and one meal sheet for the whole week, repointed before opening.
+    // One picker and one meal sheet for the whole plan, repointed before opening.
     let picker_open = RwSignal::new(false);
-    let picker_day = RwSignal::new(0usize);
+    let picker_day = RwSignal::new(today.get_untracked());
     let sheet_open = RwSignal::new(false);
-    let sheet_target = RwSignal::new((0usize, 0usize));
+    let sheet_target = RwSignal::new((today.get_untracked(), 0usize));
 
     let share = move |_| {
         let Some(url) = plan.with_untracked(current_share_url) else {
@@ -53,9 +56,9 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
         }
         own_plan.set(None);
     };
-    let clear_week = move |_| {
+    let clear_plan = move |_| {
         if window()
-            .confirm_with_message("Clear the whole week?")
+            .confirm_with_message("Clear the whole plan?")
             .unwrap_or(false)
         {
             plan.set(MealPlan::default());
@@ -63,8 +66,8 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
     };
 
     view! {
-        <header class="page-head page-head--wide">
-            <h1>"This week"</h1>
+        <header class="page-head">
+            <h1>"Plan"</h1>
             <button type="button" class="btn" on:click=share prop:disabled=move || is_empty.get()>
                 "Share"
             </button>
@@ -81,32 +84,33 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
         </Show>
 
         <div class="week">
-            {(0..7)
-                .map(|day| {
-                    view! {
-                        <DayCard
-                            day=day
-                            is_today=day == today
-                            recipes=recipes
-                            plan=plan
-                            picker_day=picker_day
-                            picker_open=picker_open
-                            sheet_target=sheet_target
-                            sheet_open=sheet_open
-                        />
-                    }
-                })
-                .collect_view()}
+            <For each=move || dates.get() key=|date| *date let:date>
+                {move || {
+                    let t = today.get();
+                    (date > t && date.weekday() == 0)
+                        .then(|| view! { <p class="week__divider">"next week"</p> })
+                }}
+                <DayCard
+                    date=date
+                    today=today
+                    recipes=recipes
+                    plan=plan
+                    picker_day=picker_day
+                    picker_open=picker_open
+                    sheet_target=sheet_target
+                    sheet_open=sheet_open
+                />
+            </For>
         </div>
 
         <p class="week__foot">
             <button
                 type="button"
                 class="btn btn--quiet"
-                on:click=clear_week
+                on:click=clear_plan
                 prop:disabled=move || is_empty.get()
             >
-                "Clear week"
+                "Clear plan"
             </button>
         </p>
 
@@ -117,36 +121,20 @@ fn Week(recipes: Vec<Recipe>, plan: RwSignal<MealPlan>) -> impl IntoView {
 
 #[component]
 fn DayCard(
-    day: usize,
-    is_today: bool,
+    date: Date,
+    today: RwSignal<Date>,
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
-    picker_day: RwSignal<usize>,
+    picker_day: RwSignal<Date>,
     picker_open: RwSignal<bool>,
-    sheet_target: RwSignal<(usize, usize)>,
+    sheet_target: RwSignal<(Date, usize)>,
     sheet_open: RwSignal<bool>,
 ) -> impl IntoView {
-    // On a phone the week is a long list: open it at today.
-    let card = NodeRef::<leptos::html::Section>::new();
-    if is_today && day > 0 {
-        Effect::new(move |_| {
-            let narrow = window()
-                .inner_width()
-                .ok()
-                .and_then(|w| w.as_f64())
-                .is_some_and(|w| w < 720.0);
-            if let (true, Some(el)) = (narrow, card.get()) {
-                let opts = ScrollIntoViewOptions::new();
-                opts.set_block(ScrollLogicalPosition::Start);
-                el.scroll_into_view_with_scroll_into_view_options(&opts);
-            }
-        });
-    }
-
+    let is_today = move || date == today.get();
+    let label = move || format_day(date, today.get());
     let meals = move || {
         plan.with(|p| {
-            p.days[day]
-                .meals
+            p.day(date)
                 .iter()
                 .enumerate()
                 .map(|(idx, m)| {
@@ -161,45 +149,52 @@ fn DayCard(
                 .collect::<Vec<_>>()
         })
     };
+    let has_meals = move || plan.with(|p| !p.day(date).is_empty());
+    let pick = move |_| {
+        picker_day.set(date);
+        picker_open.set(true);
+    };
 
     view! {
-        <section class="day" class:day--today=is_today node_ref=card>
-            <h2>
-                {DAY_NAMES[day]}
-                {is_today.then(|| view! { <span class="tag-today">"today"</span> })}
-            </h2>
-            {move || {
-                meals()
-                    .into_iter()
-                    .map(|(idx, title, servings)| {
-                        view! {
-                            <button
-                                type="button"
-                                class="meal"
-                                on:click=move |_| {
-                                    sheet_target.set((day, idx));
-                                    sheet_open.set(true);
-                                }
-                            >
-                                <span class="meal__title">{title}</span>
-                                <span class="pill mono" title="Servings">{servings}</span>
-                            </button>
-                        }
-                    })
-                    .collect_view()
-            }}
-            <button
-                type="button"
-                class="meal meal--add"
-                on:click=move |_| {
-                    picker_day.set(day);
-                    picker_open.set(true);
+        <Show
+            when=move || has_meals() || is_today()
+            fallback=move || {
+                view! {
+                    <button type="button" class="day day--empty" on:click=pick>
+                        <span>{label}</span>
+                        <IconPlus />
+                    </button>
                 }
-            >
-                <IconPlus />
-                "Add a meal"
-            </button>
-        </section>
+            }
+        >
+            <section class="day" class:day--today=is_today>
+                <h2>{label}</h2>
+                {move || {
+                    meals()
+                        .into_iter()
+                        .map(|(idx, title, servings)| {
+                            view! {
+                                <button
+                                    type="button"
+                                    class="meal"
+                                    on:click=move |_| {
+                                        sheet_target.set((date, idx));
+                                        sheet_open.set(true);
+                                    }
+                                >
+                                    <span class="meal__title">{title}</span>
+                                    <span class="pill mono" title="Servings">{servings}</span>
+                                </button>
+                            }
+                        })
+                        .collect_view()
+                }}
+                <button type="button" class="meal meal--add" on:click=pick>
+                    <IconPlus />
+                    "Add a meal"
+                </button>
+            </section>
+        </Show>
     }
 }
 
@@ -207,7 +202,7 @@ fn DayCard(
 #[component]
 fn MealSheet(
     open: RwSignal<bool>,
-    target: RwSignal<(usize, usize)>,
+    target: RwSignal<(Date, usize)>,
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
 ) -> impl IntoView {

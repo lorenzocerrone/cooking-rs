@@ -4,6 +4,7 @@
 //! types** — the component/page layer calls into here so that what something
 //! *says* is decoupled from how the logic computes it and how the view renders it.
 
+use crate::date::{Date, MONTH_SHORT, WEEKDAY_SHORT};
 use crate::models::{IngredientCatalog, Recipe, RecipeIngredient};
 use crate::quantity::{resolve_unit, CountSpec, Dimension, Unit};
 use crate::shopping::{ShoppingCategory, ShoppingLine, Subtotal};
@@ -141,6 +142,48 @@ pub fn format_timing(recipe: &Recipe) -> String {
 }
 
 /// Mass/volume with automatic step-up to the large unit at 1000.
+/// A plan day as a label: "Today", "Tomorrow", otherwise "Mon 27 Oct".
+pub fn format_day(date: Date, today: Date) -> String {
+    match today.days_until(date) {
+        0 => "Today".to_string(),
+        1 => "Tomorrow".to_string(),
+        _ => format_date(date),
+    }
+}
+
+/// [`format_day`] for use mid-sentence ("Added to tomorrow").
+pub fn format_day_inline(date: Date, today: Date) -> String {
+    match today.days_until(date) {
+        0 | 1 => format_day(date, today).to_lowercase(),
+        _ => format_day(date, today),
+    }
+}
+
+/// A date as "Mon 27 Oct".
+pub fn format_date(date: Date) -> String {
+    let (_, month, day) = date.ymd();
+    format!(
+        "{} {day} {}",
+        WEEKDAY_SHORT[date.weekday()],
+        MONTH_SHORT[month as usize - 1]
+    )
+}
+
+/// The days a grocery list covers: "Today", "Today – Tue 27", "Sun 25 – Sat 31"
+/// (the month is left out of a range's dates, which are at most weeks apart).
+pub fn format_range(from: Date, to: Date, today: Date) -> String {
+    let short = |d: Date| match today.days_until(d) {
+        0 => "Today".to_string(),
+        1 => "Tomorrow".to_string(),
+        _ => format!("{} {}", WEEKDAY_SHORT[d.weekday()], d.ymd().2),
+    };
+    if to <= from {
+        short(from)
+    } else {
+        format!("{} – {}", short(from), short(to))
+    }
+}
+
 fn scaled(amount: f64, small: &str, big: &str) -> String {
     if amount >= 1000.0 {
         format!("{} {big}", trim_decimals(amount / 1000.0, 2))
@@ -401,5 +444,31 @@ mod tests {
         assert_eq!(total_time(&r), None);
         assert_eq!(format_total_time(&r), None);
         assert_eq!(format_timing(&r), "");
+    }
+
+    #[test]
+    fn day_and_range_labels() {
+        let today = Date::from_ymd(2026, 10, 25).unwrap(); // a Sunday
+        assert_eq!(format_day(today, today), "Today");
+        assert_eq!(format_day(today.add_days(1), today), "Tomorrow");
+        assert_eq!(format_day(today.add_days(2), today), "Tue 27 Oct");
+        assert_eq!(format_day(today.add_days(7), today), "Sun 1 Nov");
+        assert_eq!(format_day(today.add_days(-1), today), "Sat 24 Oct");
+        assert_eq!(format_day_inline(today.add_days(1), today), "tomorrow");
+        assert_eq!(format_day_inline(today.add_days(2), today), "Tue 27 Oct");
+
+        assert_eq!(format_range(today, today, today), "Today");
+        assert_eq!(
+            format_range(today, today.add_days(1), today),
+            "Today – Tomorrow"
+        );
+        assert_eq!(
+            format_range(today, today.add_days(6), today),
+            "Today – Sat 31"
+        );
+        assert_eq!(
+            format_range(today.add_days(2), today.add_days(9), today),
+            "Tue 27 – Tue 3"
+        );
     }
 }

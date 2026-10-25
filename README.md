@@ -1,7 +1,7 @@
 # cooking-rs
 
-A small, statically-buildable web app for organizing recipes, planning a week of
-meals, and getting the grocery list for it. Written in Rust with
+A small, statically-buildable web app for organizing recipes, planning the coming
+days' meals, and getting the grocery list for it. Written in Rust with
 [Leptos](https://leptos.dev) (CSR) and built with [Trunk](https://trunkrs.dev).
 
 No backend, no database — recipes are plain JSON files embedded at compile time;
@@ -11,9 +11,11 @@ your plan is saved in the browser and shareable as a link.
 
 - **Recipes** — every `recipes/*.json` file, with a thumbnail, search, and
   cuisine/tag filters; a quick-view dialog and a full detail page with steps.
-- **Week planner** — each day is a list of meals, added from a searchable picker or a
-  recipe's "Add to week", with per-meal servings and a Share button.
-- **Grocery list** — everything the week needs, converted into each ingredient's
+- **Planner** — the next two weeks by date, from today; each day is a list of meals,
+  added from a searchable picker or a recipe's "Add to week", with per-meal servings and
+  a Share button. Past days drop off on their own.
+- **Grocery list** — everything the planned days need (all of them, or just today, 3 or
+  7 days), converted into each ingredient's
   shopping unit and summed ("1 onion" + "100 g onion" → 250 g; "3 cloves" → 12 g;
   "2 tbsp" → 30 ml; "2 cans"), grouped by aisle. Tick items off as you shop, mark
   things you have at home, add extras that aren't in a recipe, copy as text.

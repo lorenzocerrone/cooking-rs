@@ -1,3 +1,6 @@
+use crate::date::Date;
+use crate::models::MealPlan;
+
 mod add_to_week;
 mod icons;
 mod modal;
@@ -16,10 +19,26 @@ pub use recipe_picker::RecipePicker;
 pub use stepper::Stepper;
 pub use toast::Toast;
 
-/// Today's index into [`crate::models::DAY_NAMES`] (Monday = 0), from the
-/// browser clock.
-pub fn today_index() -> usize {
-    // JS: Sunday = 0 .. Saturday = 6.
-    let js_day = js_sys::Date::new_0().get_day() as usize;
-    (js_day + 6) % 7
+/// Days the plan always shows from today, and the "Add to week" sheet offers.
+pub const ROLLING_DAYS: i32 = 14;
+
+/// Today's date from the browser's local clock.
+pub fn today() -> Date {
+    let now = js_sys::Date::new_0();
+    Date::from_ymd(
+        now.get_full_year() as i32,
+        now.get_month() + 1,
+        now.get_date(),
+    )
+    .expect("the browser clock gives a valid date")
+}
+
+/// The days to list from `today`: [`ROLLING_DAYS`] of them, or through the last
+/// planned day if that is later.
+pub fn rolling_dates(today: Date, plan: &MealPlan) -> Vec<Date> {
+    let last = plan
+        .last_date()
+        .map_or(0, |d| today.days_until(d))
+        .max(ROLLING_DAYS - 1);
+    (0..=last).map(|n| today.add_days(n)).collect()
 }

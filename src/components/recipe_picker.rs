@@ -1,18 +1,19 @@
 use leptos::prelude::*;
 
-use crate::app::notify;
+use crate::app::{notify, use_today};
 use crate::components::{Modal, RecipeFilters};
+use crate::date::Date;
 use crate::filter::{available_authors, available_cuisines, available_tags, filter, RecipeQuery};
-use crate::format::format_total_time;
-use crate::models::{MealPlan, Recipe, DAY_NAMES};
+use crate::format::{format_day_inline, format_total_time};
+use crate::models::{MealPlan, Recipe};
 
-/// Searchable recipe picker for a day of the week. Tapping a recipe appends it
+/// Searchable recipe picker for a plan day. Tapping a recipe appends it
 /// to `day`'s meals in the shared [`MealPlan`]. One instance serves the whole
 /// planner: `day` is repointed before opening.
 #[component]
 pub fn RecipePicker(
     open: RwSignal<bool>,
-    day: RwSignal<usize>,
+    day: RwSignal<Date>,
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
 ) -> impl IntoView {
@@ -20,6 +21,7 @@ pub fn RecipePicker(
     let tags = StoredValue::new(recipes.with_value(|rs| available_tags(rs)));
     let authors = StoredValue::new(recipes.with_value(|rs| available_authors(rs)));
     let query = RwSignal::new(RecipeQuery::default());
+    let today = use_today();
 
     // Start every opening with a clean search.
     Effect::new(move |_| {
@@ -32,7 +34,8 @@ pub fn RecipePicker(
         let q = query.get();
         recipes.with_value(|rs| filter(rs, &q).into_iter().cloned().collect::<Vec<_>>())
     };
-    let title = Signal::derive(move || format!("Add to {}", DAY_NAMES[day.get() % 7]));
+    let title =
+        Signal::derive(move || format!("Add to {}", format_day_inline(day.get(), today.get())));
 
     view! {
         <Modal open=open title=title>
@@ -66,7 +69,10 @@ pub fn RecipePicker(
                                     let d = day.get_untracked();
                                     plan.update(|p| p.add_meal(d, id.clone()));
                                     open.set(false);
-                                    notify(format!("Added to {}", DAY_NAMES[d % 7]));
+                                    notify(format!(
+                                        "Added to {}",
+                                        format_day_inline(d, today.get_untracked())
+                                    ));
                                 };
                                 view! {
                                     <button type="button" class="pick-row" on:click=pick>

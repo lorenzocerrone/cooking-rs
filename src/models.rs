@@ -1,11 +1,12 @@
 //! Data model for the app. Recipes and ingredients are authored as JSON and
 //! embedded at build time; the meal plan is the only mutable, shareable state.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::date::Date;
 use crate::quantity::{CountSpec, Unit};
 
 /// A single recipe, as authored in `recipes/*.json`. Ingredients reference the
@@ -110,17 +111,6 @@ impl IngredientCatalog {
         self.0.get(key)
     }
 }
-
-/// Day-of-week labels, index 0..7 (Monday first).
-pub const DAY_NAMES: [&str; 7] = [
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-    "Sunday",
-];
 
 /// A chosen meal: a recipe id plus an optional target servings count. `servings:
 /// None` means "use the recipe's own servings" (no scaling).
@@ -255,89 +245,173 @@ pub enum Extra {
     },
 }
 
-/// Number of days in a plan (Monday..Sunday).
-pub const DAYS_PER_WEEK: usize = 7;
-
-/// The full weekly meal plan. This is the value that gets encoded into the URL
-/// and persisted locally.
+/// The meal plan: each calendar date's meals, plus extra grocery items. This is
+/// the value that gets encoded into a share link and persisted locally.
 ///
-/// Wire format is plain, untagged JSON so every link ever shared keeps decoding:
-/// new fields are optional and omitted when empty.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Days without meals are never stored, so iterating `dates` visits only the
+/// planned days, in date order. On the wire it is `{"dates": {"2026-10-27":
+/// [...]}, "extras": [...]}`; decoding goes through [`PlanWire`], which also
+/// accepts the older seven-weekday shape.
+#[derive(Clone, Debug, Default, Serialize, PartialEq)]
 pub struct MealPlan {
-    /// Exactly [`DAYS_PER_WEEK`] entries after [`MealPlan::normalize`].
-    pub days: Vec<DayPlan>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub dates: BTreeMap<Date, DayPlan>,
     /// Extra grocery items not tied to a meal (staples, snacks), folded into the
     /// shopping list unscaled.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extras: Vec<Extra>,
 }
 
-impl Default for MealPlan {
-    fn default() -> Self {
-        Self {
-            days: vec![DayPlan::default(); DAYS_PER_WEEK],
-            extras: Vec::new(),
-        }
-    }
-}
-
 impl MealPlan {
-    /// Force `days` to exactly [`DAYS_PER_WEEK`] entries (pad with empty days,
-    /// drop surplus). Call after decoding external input so indexing by day is
-    /// always in bounds.
-    pub fn normalize(&mut self) {
-        self.days.resize(DAYS_PER_WEEK, DayPlan::default());
-    }
-
     /// True when no day holds a meal and there are no extras.
     pub fn is_empty(&self) -> bool {
-        self.entries().next().is_none() && self.extras.is_empty()
+        self.dates.is_empty() && self.extras.is_empty()
     }
 
-    /// Every chosen meal, Monday..Sunday, in each day's order.
+    /// The meals planned for `date` (empty when none).
+    pub fn day(&self, date: Date) -> &[MealEntry] {
+        self.dates.get(&date).map_or(&[], |d| d.meals.as_slice())
+    }
+
+    /// Every chosen meal, in date order and each day's order.
     pub fn entries(&self) -> impl Iterator<Item = &MealEntry> {
-        self.days.iter().flat_map(|d| d.meals.iter())
+        self.dates.values().flat_map(|d| d.meals.iter())
     }
 
-    /// Number of meals in the week.
+    /// The meals dated `from..=to`, in order.
+    pub fn entries_in(&self, from: Date, to: Date) -> impl Iterator<Item = &MealEntry> {
+        (from <= to)
+            .then(|| self.dates.range(from..=to))
+            .into_iter()
+            .flatten()
+            .flat_map(|(_, d)| d.meals.iter())
+    }
+
+    /// Number of planned meals.
     pub fn meal_count(&self) -> usize {
         self.entries().count()
     }
 
+    /// The last date holding a meal.
+    pub fn last_date(&self) -> Option<Date> {
+        self.dates.keys().next_back().copied()
+    }
+
     /// The `idx`-th meal of a day, if any.
-    pub fn meal(&self, day: usize, idx: usize) -> Option<&MealEntry> {
-        self.days.get(day).and_then(|d| d.meals.get(idx))
+    pub fn meal(&self, date: Date, idx: usize) -> Option<&MealEntry> {
+        self.day(date).get(idx)
     }
 
     /// Append a recipe to a day (default servings).
-    pub fn add_meal(&mut self, day: usize, recipe: String) {
-        if let Some(d) = self.days.get_mut(day) {
-            d.meals.push(MealEntry::new(recipe));
-        }
+    pub fn add_meal(&mut self, date: Date, recipe: String) {
+        self.dates
+            .entry(date)
+            .or_default()
+            .meals
+            .push(MealEntry::new(recipe));
     }
 
-    /// Remove the `idx`-th meal of a day. Out-of-range indices are ignored.
-    pub fn remove_meal(&mut self, day: usize, idx: usize) {
-        if let Some(d) = self.days.get_mut(day) {
+    /// Remove the `idx`-th meal of a day. Out-of-range indices are ignored; a day
+    /// left without meals is dropped.
+    pub fn remove_meal(&mut self, date: Date, idx: usize) {
+        if let Some(d) = self.dates.get_mut(&date) {
             if idx < d.meals.len() {
                 d.meals.remove(idx);
+            }
+            if d.meals.is_empty() {
+                self.dates.remove(&date);
             }
         }
     }
 
     /// Set (or clear, with `None`) the custom servings of a meal. Does nothing
     /// for an index that holds no meal.
-    pub fn set_servings(&mut self, day: usize, idx: usize, servings: Option<u32>) {
-        if let Some(entry) = self.days.get_mut(day).and_then(|d| d.meals.get_mut(idx)) {
+    pub fn set_servings(&mut self, date: Date, idx: usize, servings: Option<u32>) {
+        if let Some(entry) = self.dates.get_mut(&date).and_then(|d| d.meals.get_mut(idx)) {
             entry.servings = servings;
         }
+    }
+
+    /// Forget the days before `today`. Past meals are never shown or shopped for.
+    pub fn drop_before(&mut self, today: Date) {
+        self.dates = self.dates.split_off(&today);
+    }
+}
+
+/// A meal plan as found in a share link or in storage, before it is tied to a
+/// calendar. Untagged so every link ever shared keeps decoding:
+/// - `Weekdays`: the older seven Monday-first `days` (each a list, or the
+///   original `{breakfast, lunch, dinner}` object, see [`DayPlan`]);
+/// - `Dated`: the current shape, keyed by ISO date.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum PlanWire {
+    // `Weekdays` first: it requires `days`, while every `Dated` field defaults.
+    Weekdays {
+        days: Vec<DayPlan>,
+        #[serde(default)]
+        extras: Vec<Extra>,
+    },
+    Dated {
+        #[serde(default)]
+        dates: BTreeMap<Date, DayPlan>,
+        #[serde(default)]
+        extras: Vec<Extra>,
+    },
+}
+
+impl Default for PlanWire {
+    fn default() -> Self {
+        PlanWire::Dated {
+            dates: BTreeMap::new(),
+            extras: Vec::new(),
+        }
+    }
+}
+
+impl PlanWire {
+    /// The plan as of `today`: weekday plans move each day to its next date on
+    /// or after today (Monday → the coming Monday), past dates are dropped, and
+    /// empty days are not kept.
+    pub fn into_plan(self, today: Date) -> MealPlan {
+        let (dates, extras) = match self {
+            PlanWire::Dated { dates, extras } => (dates, extras),
+            PlanWire::Weekdays { days, extras } => {
+                let dates = days
+                    .into_iter()
+                    .take(7)
+                    .enumerate()
+                    .map(|(weekday, day)| (today.next_weekday(weekday), day))
+                    .collect();
+                (dates, extras)
+            }
+        };
+        let mut plan = MealPlan {
+            dates: dates
+                .into_iter()
+                .filter(|(_, d)| !d.meals.is_empty())
+                .collect(),
+            extras,
+        };
+        plan.drop_before(today);
+        plan
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A Sunday.
+    fn today() -> Date {
+        Date::from_ymd(2026, 10, 25).unwrap()
+    }
+
+    fn decode(json: &str) -> MealPlan {
+        serde_json::from_str::<PlanWire>(json)
+            .unwrap()
+            .into_plan(today())
+    }
 
     #[test]
     fn meal_entry_serializes_bare_string_without_servings() {
@@ -369,22 +443,37 @@ mod tests {
     }
 
     #[test]
-    fn day_serializes_as_a_list_and_round_trips() {
+    fn dated_plan_serializes_by_iso_date_and_round_trips() {
         let mut plan = MealPlan::default();
-        plan.add_meal(0, "oats".into());
-        plan.add_meal(0, "dal".into());
-        plan.set_servings(0, 1, Some(6));
+        let tomorrow = today().add_days(1);
+        plan.add_meal(tomorrow, "oats".into());
+        plan.add_meal(tomorrow, "dal".into());
+        plan.set_servings(tomorrow, 1, Some(6));
+        plan.add_meal(today(), "soup".into());
         let json = serde_json::to_string(&plan).unwrap();
-        assert!(
-            json.starts_with(r#"{"days":[["oats",{"recipe":"dal","servings":6}],[],"#),
-            "{json}"
+        assert_eq!(
+            json,
+            r#"{"dates":{"2026-10-25":["soup"],"2026-10-26":["oats",{"recipe":"dal","servings":6}]}}"#
         );
-        let back: MealPlan = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, plan);
+        assert_eq!(decode(&json), plan);
+        assert_eq!(serde_json::to_string(&MealPlan::default()).unwrap(), "{}");
+        assert_eq!(decode("{}"), MealPlan::default());
     }
 
     #[test]
-    fn legacy_slot_days_decode_into_lists() {
+    fn weekday_plans_move_to_their_next_date() {
+        // Today is a Sunday: Monday..Saturday land in the coming week, Sunday today.
+        let json = r#"{"days":[["oats"],[],[],[],[],["pizza"],["roast"]]}"#;
+        let plan = decode(json);
+        let dates: Vec<String> = plan.dates.keys().map(|d| d.to_string()).collect();
+        assert_eq!(dates, vec!["2026-10-25", "2026-10-26", "2026-10-31"]);
+        assert_eq!(plan.day(today())[0].recipe, "roast");
+        assert_eq!(plan.day(today().add_days(1))[0].recipe, "oats");
+        assert_eq!(plan.day(today().add_days(6))[0].recipe, "pizza");
+    }
+
+    #[test]
+    fn legacy_slot_days_decode_into_dated_lists() {
         // Links shared before days became lists: slots as an object, meals as
         // bare ids or {recipe, servings} objects, empty slots as null/missing.
         let json = r#"{"days":[
@@ -392,40 +481,28 @@ mod tests {
             {"dinner":"soup"},
             {}
         ]}"#;
-        let mut plan: MealPlan = serde_json::from_str(json).unwrap();
-        plan.normalize();
-        let day0: Vec<_> = plan.days[0]
-            .meals
-            .iter()
-            .map(|m| m.recipe.as_str())
-            .collect();
+        let plan = decode(json);
+        let monday = today().next_weekday(0);
+        let day0: Vec<_> = plan.day(monday).iter().map(|m| m.recipe.as_str()).collect();
         assert_eq!(day0, vec!["omelette", "dal"]);
-        assert_eq!(plan.meal(0, 1).unwrap().servings, Some(4));
-        assert_eq!(plan.meal(1, 0).unwrap().recipe, "soup");
-        assert!(plan.days[2].meals.is_empty());
-        assert_eq!(plan.days.len(), DAYS_PER_WEEK);
+        assert_eq!(plan.meal(monday, 1).unwrap().servings, Some(4));
+        assert_eq!(plan.meal(monday.add_days(1), 0).unwrap().recipe, "soup");
+        assert_eq!(plan.dates.len(), 2, "empty days are not kept");
     }
 
     #[test]
-    fn normalize_pads_and_truncates_to_seven_days() {
-        let mut short: MealPlan = serde_json::from_str(r#"{"days":[["omelette"]]}"#).unwrap();
-        short.normalize();
-        assert_eq!(short.days.len(), DAYS_PER_WEEK);
-        assert_eq!(short.meal(0, 0).unwrap().recipe, "omelette");
-        assert!(short.meal(6, 0).is_none());
-
-        let mut long = MealPlan::default();
-        long.days.push(DayPlan::default());
-        long.normalize();
-        assert_eq!(long.days.len(), DAYS_PER_WEEK);
+    fn past_dates_and_empty_days_are_dropped_on_decode() {
+        let json = r#"{"dates":{"2026-10-20":["old"],"2026-10-24":["yesterday"],
+            "2026-10-25":["today"],"2026-10-28":[]}}"#;
+        let plan = decode(json);
+        let ids: Vec<_> = plan.entries().map(|m| m.recipe.as_str()).collect();
+        assert_eq!(ids, vec!["today"]);
+        assert_eq!(plan.dates.len(), 1);
+        assert!(serde_json::from_str::<PlanWire>(r#"{"dates":{"tomorrow":[]}}"#).is_err());
     }
 
     #[test]
     fn extras_are_omitted_when_empty_and_both_kinds_round_trip() {
-        let empty = MealPlan::default();
-        let json = serde_json::to_string(&empty).unwrap();
-        assert!(!json.contains("extras"), "{json}");
-
         let mut plan = MealPlan::default();
         plan.extras.push(Extra::Catalog(RecipeIngredient::new(
             "milk".into(),
@@ -449,12 +526,10 @@ mod tests {
             "{json}"
         );
         assert!(json.contains(r#"{"name":"Candles"}"#), "{json}");
-        let back: MealPlan = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, plan);
+        assert_eq!(decode(&json), plan);
 
         // The pre-`Extra` format (a bare RecipeIngredient list) still decodes.
-        let legacy: MealPlan =
-            serde_json::from_str(r#"{"days":[],"extras":[{"ingredient":"milk"}]}"#).unwrap();
+        let legacy = decode(r#"{"days":[],"extras":[{"ingredient":"milk"}]}"#);
         assert_eq!(
             legacy.extras,
             vec![Extra::Catalog(RecipeIngredient::new("milk".into(), None))]
@@ -462,29 +537,46 @@ mod tests {
     }
 
     #[test]
-    fn add_remove_and_servings_respect_bounds() {
+    fn add_remove_servings_and_ranges() {
+        let t = today();
         let mut plan = MealPlan::default();
         assert!(plan.is_empty());
-        assert_eq!(plan.meal_count(), 0);
+        assert_eq!(plan.last_date(), None);
 
-        plan.add_meal(2, "dal".into());
-        plan.add_meal(0, "soup".into());
-        plan.add_meal(9, "ghost".into()); // out of range: ignored
+        plan.add_meal(t.add_days(2), "dal".into());
+        plan.add_meal(t, "soup".into());
+        plan.add_meal(t.add_days(9), "tacos".into());
         assert!(!plan.is_empty());
         let ids: Vec<&str> = plan.entries().map(|e| e.recipe.as_str()).collect();
-        assert_eq!(ids, vec!["soup", "dal"]); // Monday first, then Wednesday
-        assert_eq!(plan.meal_count(), 2);
+        assert_eq!(ids, vec!["soup", "dal", "tacos"], "date order");
+        assert_eq!(plan.meal_count(), 3);
+        assert_eq!(plan.last_date(), Some(t.add_days(9)));
 
-        plan.set_servings(2, 0, Some(6));
-        plan.set_servings(2, 5, Some(6)); // no such meal: ignored
-        assert_eq!(plan.meal(2, 0).unwrap().servings, Some(6));
-        plan.set_servings(2, 0, None);
-        assert_eq!(plan.meal(2, 0).unwrap().servings, None);
+        let in_range: Vec<&str> = plan
+            .entries_in(t, t.add_days(2))
+            .map(|e| e.recipe.as_str())
+            .collect();
+        assert_eq!(in_range, vec!["soup", "dal"]);
+        assert_eq!(plan.entries_in(t.add_days(3), t.add_days(8)).count(), 0);
+        assert_eq!(plan.entries_in(t.add_days(2), t).count(), 0, "reversed");
 
-        plan.remove_meal(2, 3); // ignored
-        plan.remove_meal(2, 0);
-        assert!(plan.days[2].meals.is_empty());
+        plan.set_servings(t.add_days(2), 0, Some(6));
+        plan.set_servings(t.add_days(2), 5, Some(6)); // no such meal: ignored
+        plan.set_servings(t.add_days(4), 0, Some(6)); // no such day: ignored
+        assert_eq!(plan.meal(t.add_days(2), 0).unwrap().servings, Some(6));
+        assert!(!plan.dates.contains_key(&t.add_days(4)));
+
+        plan.remove_meal(t.add_days(2), 3); // ignored
+        assert_eq!(plan.meal_count(), 3);
+        plan.remove_meal(t.add_days(2), 0);
+        assert!(
+            !plan.dates.contains_key(&t.add_days(2)),
+            "empty day dropped"
+        );
+
+        plan.drop_before(t.add_days(1));
         assert_eq!(plan.meal_count(), 1);
+        assert_eq!(plan.last_date(), Some(t.add_days(9)));
 
         let mut only_extras = MealPlan::default();
         only_extras.extras.push(Extra::Custom {

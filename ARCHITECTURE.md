@@ -1,7 +1,7 @@
 # Architecture & Roadmap
 
 `cooking-rs` is a fully static, single-page web app for organizing recipes,
-planning a week of meals, and producing the grocery list for it. It has **no
+planning the coming days' meals, and producing the grocery list for it. It has **no
 backend and no database**: recipe data lives in JSON files embedded into the
 WebAssembly binary at build time; user state lives in the browser (`localStorage`)
 and, for sharing, in the URL.
@@ -16,7 +16,7 @@ and, for sharing, in the URL.
 - **Local-first, link-shareable.** The meal plan and grocery ticks persist on the device.
   A "Share" button produces a link carrying the plan in the URL fragment — no accounts.
 - **Phone first.** Designed for a phone in the kitchen and in the shop (bottom tab bar,
-  bottom sheets, tap-to-tick rows); wider screens get a top bar and a 7-column week.
+  bottom sheets, tap-to-tick rows); wider screens get a top bar; the plan is one rolling list of dates everywhere.
 - **Correct grocery math.** Recipes use natural units ("1 onion", "3 cloves", "2 tbsp",
   "1 can"); the list converts into each ingredient's shopping unit and sums exactly.
 - **Validated data.** `cargo test` rejects any recipe or catalog file that would degrade the
@@ -77,7 +77,7 @@ the component layer uses Leptos types, so all logic is unit-testable in isolatio
 can be reworked without touching logic (and vice versa):
 
 ```
-quantity          units, dimensions, piece specs, conversions (pure, no deps)
+quantity/date     units and conversions; calendar dates (pure, no deps)
   ↑
 models            domain types (pure)
   ↑
@@ -106,27 +106,35 @@ src/
   bin/scaffold.rs   Host-only authoring CLI (arguments + file I/O around scaffold.rs).
                     Trunk builds only the app (`data-bin="cooking-rs"` in index.html).
   app.rs            <Router> (reads APP_BASE_PATH at compile time) + <Nav> + routes + <Toast>.
-                    Owns the shared signals (MealPlan, GroceryState, own_plan, toast) and the
+                    Owns the shared signals (MealPlan, GroceryState, own_plan, today, toast)
+                    and the
                     single data Resource (provide_context), seeds them via
                     storage::resolve_initial, clears an imported #plan= hash, and saves to
                     localStorage on change (paused while a shared plan is previewed).
+                    `today` rolls over on visibilitychange, dropping the day that passed.
                     Exposes BASE_PATH, href() (every in-app link must use it: the router
                     base applies to matching only), use_plan/use_grocery/use_own_plan/
-                    use_app_data and notify().
+                    use_today/use_app_data and notify().
+  date.rs           Date (days since 1970, ISO `YYYY-MM-DD` on the wire): from_ymd/ymd,
+                    add_days, days_until, weekday (Monday = 0), next_weekday. No
+                    dependency, and never reads the clock: "today" comes from the UI layer.
   quantity.rs       Dimension {Mass, Volume, Count}; Unit {g, kg, ml, l, tsp, tbsp, cup, pcs}
                     with parse/as_str/to_base; Quantity; CountSpec {label, plural, per_piece};
                     resolve_unit (recipe text → Unit, incl. piece labels); to_shopping
                     (Quantity → ingredient's shopping unit, or Other(dimension) if no conversion).
   models.rs         Domain types: Recipe, RecipeIngredient {ingredient, amount?, unit?, note?,
                     optional}, CatalogIngredient {name, unit: Unit, category, count?},
-                    IngredientCatalog, MealPlan {days, extras} / DayPlan {meals} / MealEntry /
+                    IngredientCatalog, MealPlan {dates: BTreeMap<Date, DayPlan>, extras} / PlanWire
+                    (dated or legacy weekday wire shape → into_plan(today)) / DayPlan {meals} /
+                    MealEntry /
                     Extra {Catalog | Custom}. All data structs deny unknown fields.
   recipes.rs        Data-loading BOUNDARY. recipe_files() (per-file parse results),
                     load_recipes()/parse_catalog()/load_catalog()/load_data() → AppData.
                     Embedded today; async-first so a future HTTP loader is a one-file change.
   validate.rs       #[cfg(test)] data validation: files parse, ids match file names, refs
                     resolve, units convert, catalog units are base units, images exist.
-  shopping.rs       Pure LOGIC: aggregate(plan, recipes, catalog) → category-grouped
+  shopping.rs       Pure LOGIC: aggregate(plan, from, to, recipes, catalog) → the meals dated
+                    from..=to (extras always) as category-grouped
                     ShoppingLines {key, name, count, subtotals (base units, primary first),
                     to_taste, optional, sources, custom_quantities}; catalog extras folded
                     in unscaled, custom extras as `custom:*` lines in the "Other" aisle (last).
@@ -141,16 +149,19 @@ src/
                     pieces; units must convert); find_ingredient (key/name, singular/plural,
                     no guessing); unknown ingredients get extras::suggest hints and a
                     catalog stub; render_json (house style) and render_svg (placeholder).
-  format.rs         Pure DISPLAY FORMATTING (no Leptos): format_quantity (authored unit),
+  format.rs         Pure DISPLAY FORMATTING (no Leptos): format_day(_inline) ("Today",
+                    "Tomorrow", "Mon 27 Oct"), format_range, format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
                     pieces, labels), format_line_quantity, format_text (export), timing.
-  state.rs          Share BOUNDARY. encode/decode a MealPlan ⇄ base64 ⇄ `#plan=` fragment;
+  state.rs          Share BOUNDARY. encode/decode(…, today) a MealPlan ⇄ base64 ⇄ `#plan=`;
                     share_url builds the link, read_hash/clear_hash handle an opened one.
   storage.rs        Persistence BOUNDARY. PersistedState {version, plan, grocery} ⇄ JSON ⇄
-                    localStorage; GroceryState {checked (with amount snapshots), omitted,
-                    hide_to_taste} + visible()/remaining(); resolve_initial → Startup
+                    localStorage (decode takes today, migrating weekday plans); GroceryState
+                    {checked (with amount snapshots), omitted, hide_to_taste, range:
+                    GroceryRange {All | Days(n)} with until(plan, today)} + visible()/
+                    remaining(); resolve_initial → Startup
                     {state, own_plan} (a hash plan is previewed, the own plan set aside);
-                    prune_checked.
+                    prune_checked (drops a tick only when the line is gone or grew).
   pwa.rs            Registers the service worker + injects the manifest <link> (prod only).
   components/
     nav.rs            Recipes / Week / Grocery tabs: bottom bar on phones, top bar ≥720px
@@ -162,16 +173,20 @@ src/
     recipe_filters.rs Search box + chip row ("by <author>" when there are 2+ authors, tags,
                       cuisines) driving a RecipeQuery.
     recipe_picker.rs  Recipe picker sheet for a day; appends to the plan.
-    add_to_week.rs    "Add to week" button + day sheet (recipe page).
+    add_to_week.rs    "Add to week" button + sheet of the rolling dates (recipe page).
     icons.rs          Inline SVG icons.
-    mod.rs            also today_index() (Monday = 0, from the browser clock).
+    mod.rs            also today() (local browser date) and rolling_dates(today, plan)
+                      (14 days from today, or through the last planned day).
   pages/
     recipes_page.rs       Compact list with search/filter chips; rows link to the recipe.
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
                           tappable steps (not persisted), AddToWeek.
-    planner_page.rs       "This week": Share button, shared-plan banner, 7 day cards (meal
-                          rows + "Add a meal"), meal sheet (servings, view, remove), clear.
-    grocery_page.rs       Aisles with tap-to-tick rows (ticked sink); holding a row opens its
+    planner_page.rs       "Plan": Share button, shared-plan banner, the rolling dates from
+                          today (cards for today and days with meals, thin rows for empty
+                          days, a "next week" divider before Mondays), meal sheet
+                          (servings, view, remove), clear.
+    grocery_page.rs       Range chips (Today · 3 days · 7 days · All planned) and the dates
+                          covered in the summary; aisles with tap-to-tick rows (ticked sink); holding a row opens its
                           sheet ("needed for …", "I have it at home"); at-home chips,
                           free-text extras with suggestions, to-taste toggle, copy.
 ```
@@ -191,7 +206,8 @@ src/
   nothing is saved, the hash is cleared, and the planner shows a banner with "Keep it" (adopt
   and resume saving) or "Back to mine" (restore). Without a hash, the stored state loads.
   Both payloads are untagged JSON with defaulted fields and backward-compatible decoders, so
-  every link ever shared keeps decoding; `storage` carries a `version` (now 2) so an older
+  every link ever shared keeps decoding (weekday plans land on their next dates as of
+  today, see `PlanWire`); `storage` carries a `version` (now 3) so an older
   build refuses a newer payload instead of misreading it.
 - **The logic ⇄ UI boundary.** `shopping.rs` and `filter.rs` are pure logic and `format.rs`
   is pure formatting. Components and pages never compute or format inline.
@@ -233,19 +249,25 @@ optional and old files keep parsing; unknown fields are rejected (typos fail val
 (shopping-unit) sub-total first and any unconvertible sub-total after ("2 pcs + 100 g").
 Display rounds to shop-friendly values (kg/l above 1000, whole pieces rounded up).
 
-**Meal plan** (in-memory, share link, localStorage) — `MealPlan { days: [DayPlan; 7], extras }`.
-A `DayPlan` is a plain **list** of `MealEntry` (recipe id + optional servings) in the order
+**Meal plan** (in-memory, share link, localStorage) — `MealPlan { dates: BTreeMap<Date,
+DayPlan>, extras }`, serialized as `{"dates": {"2026-10-27": [...]}, "extras": [...]}`. Days
+without meals are not stored and past dates are dropped on decode and at midnight rollover.
+Decoding goes through `PlanWire`, which also accepts the earlier `{days: [7 × DayPlan]}`
+shape and maps each weekday (Monday = 0) to its next date on or after today. A `DayPlan` is a plain **list** of `MealEntry` (recipe id + optional servings) in the order
 added — no fixed breakfast/lunch/dinner slots. On the wire a day is a JSON array; the decoder
 also accepts the original `{breakfast, lunch, dinner}` object (slots become list entries). A
 `MealEntry` serializes as a bare string when servings are default and as an object otherwise.
 `extras` are `Extra`s: `Catalog(RecipeIngredient)` (the pre-existing shape, summed like recipe
 lines) or `Custom {name, quantity?}` (free text, shown as typed in the "Other" aisle);
-omitted when empty. `normalize()` pads decoded plans to 7 days.
+omitted when empty.
 
 **Persisted state** (localStorage key `cooking-rs.state`) —
-`{ version: 2, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste } }`.
-A tick remembers the amounts it was made at and is dropped when the plan changes them;
-omissions are sticky.
+`{ version: 3, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste,
+range: "all" | {"days": n} } }`. The grocery list covers today through `range` (default: the
+last planned day); the nav badge uses the same range. A tick remembers the amounts it was
+made at and is dropped only when the line disappears or now needs more (a larger amount or a
+new dimension), so a past day dropping off keeps what you bought ticked; omissions are
+sticky.
 
 **Invariants** (enforced by `src/validate.rs` under `cargo test`): every data file parses;
 recipe `id` equals the file stem and is unique; every recipe has an `author` ("Claude" marks
@@ -280,7 +302,7 @@ is an aisle in `shopping::CATEGORY_ORDER`.
   Mono) come from Google Fonts and fall back to system faces offline.
 - **Styling:** plain CSS in `style.css`, tokens on `:root` (light) overridden under
   `prefers-color-scheme: dark`. Phone first: the tab bar, sheets and row interactions are
-  the base; `min-width: 720px` (top bar, dialogs) and `900px` (7-column week) widen it.
+  the base; `min-width: 720px` (top bar, dialogs) widens it; the plan stays one centered column at every width.
 
 ## 7. Roadmap
 
@@ -307,32 +329,23 @@ is an aisle in `shopping::CATEGORY_ORDER`.
   scaffolder (draft text → validated recipe JSON + placeholder image); 12 weeknight dinners
   (25 recipes), Fish and Frozen aisles, aisle and `TODO` validation rules. A required `author`
   on every recipe ("Claude" for the generated ones) with "by …" filter chips.
+- **Phase 8 — Plan by date.** The plan is keyed by calendar date (pure `date.rs`, no
+  dependency); a rolling 14-day list from today on every width, empty days as thin rows,
+  "next week" dividers; weekday plans and links migrate to their next dates (storage v3);
+  grocery range chips (Today · 3 days · 7 days · All planned) shared with the tab badge; a
+  tick survives when the amount needed shrinks; "Add to week" lists the same dates.
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Plan by date, not by weekday.** The plan becomes a map from calendar date to that
-   day's meals, replacing the seven Monday-indexed `days`. The week page shows a rolling
-   list from today, about 14 days ahead, on the phone and on desktop. This covers both
-   habits: planning today plus two or three days, and planning on Saturday for the whole
-   next week. Past dates drop off on their own, so there is no "clear the past" step.
-   - *Model:* dated days in `models.rs`, "today" passed in from the UI layer so the logic
-     stays host-testable. Storage schema v3 and a new share-link shape that carries dates.
-   - *Migration:* stored v2 plans and old `#plan=` links map each weekday to its next
-     date from today, like the slot-to-list migration did.
-   - *Grocery range:* the list covers today through the last planned day by default, with
-     a way to shorten the range (for example "next 3 days"). The page says which dates it
-     covers.
-   - *Add to week:* the recipe page's day sheet lists the same rolling dates.
-   - The desktop 7-column grid and the scroll-to-today effect in `planner_page.rs` go away.
-2. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
+1. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
    reorder within a day with up/down, and a "Clear plan" sheet with "Meals only" (keeps
    extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
-3. **Live with it.** A week of real planning and one shop on the phone; a fix round
+2. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
 ### Later, on demand

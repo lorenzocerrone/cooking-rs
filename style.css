@@ -159,11 +159,6 @@ main > * {
   min-width: 0;
 }
 
-main > .week,
-main > .page-head--wide {
-  max-width: none;
-}
-
 .page-head {
   display: flex;
   justify-content: space-between;
@@ -739,16 +734,6 @@ h1 {
   white-space: nowrap;
 }
 
-.tag-today {
-  margin-left: 8px;
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--sienna);
-  vertical-align: middle;
-}
-
 /* ---------- Week ---------- */
 .banner {
   display: flex;
@@ -778,7 +763,46 @@ h1 {
   border: 1px solid var(--rule-mid);
   border-radius: var(--radius);
   overflow: hidden;
-  scroll-margin-top: 12px;
+}
+
+/* A day without meals: one thin row that opens the picker. */
+.day--empty {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--rule-soft);
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.day--empty .icon {
+  color: var(--sienna);
+}
+
+.day--empty:hover {
+  background: var(--inset);
+}
+
+.week__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.week__divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--rule-soft);
 }
 
 .day h2 {
@@ -855,34 +879,6 @@ h1 {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-}
-
-@media (min-width: 900px) {
-  .week {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .meal {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
-    padding: 9px 10px;
-    font-size: 13px;
-  }
-
-  .meal__title {
-    white-space: normal;
-  }
-
-  .meal--add {
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .day h2 {
-    font-size: 13px;
-  }
 }
 
 /* ---------- Grocery ---------- */

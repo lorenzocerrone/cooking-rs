@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 use leptos_router::hooks::use_location;
 
-use crate::app::{href, use_app_data, use_grocery, use_plan};
+use crate::app::{href, use_app_data, use_grocery, use_plan, use_today};
 use crate::components::{IconBook, IconCalendar, IconCart};
 use crate::shopping::aggregate;
 
@@ -14,10 +14,15 @@ pub fn Nav() -> impl IntoView {
     let data = use_app_data();
     let plan = use_plan();
     let grocery = use_grocery();
+    let today = use_today();
+    // Same range as the grocery page, so the badge matches its count.
     let remaining = Memo::new(move |_| {
         data.get()
             .map(|d| {
-                let cats = aggregate(&plan.get(), &d.recipes, &d.catalog);
+                let t = today.get();
+                let range = grocery.with(|g| g.range);
+                let cats =
+                    plan.with(|p| aggregate(p, t, range.until(p, t), &d.recipes, &d.catalog));
                 grocery.with(|g| g.remaining(&cats))
             })
             .unwrap_or(0)

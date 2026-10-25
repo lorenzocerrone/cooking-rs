@@ -3,14 +3,16 @@
 //! share link. The app reads such a link on startup (see `storage::resolve_initial`)
 //! and produces one on demand (the planner's Share button).
 //!
-//! The payload is untagged JSON and every change so far has been additive, so
-//! all links ever shared keep decoding. If a breaking change is ever needed,
-//! introduce a `#plan=v2:...` prefix and keep this decoder for the old form.
+//! The payload is untagged JSON decoded through [`PlanWire`], so all links ever
+//! shared keep decoding: weekday links (from before plans were dated) land on
+//! the coming dates. If a change ever can't be told apart by shape, introduce a
+//! `#plan=v2:...` prefix and keep this decoder for the old form.
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use leptos::prelude::window;
 
-use crate::models::MealPlan;
+use crate::date::Date;
+use crate::models::{MealPlan, PlanWire};
 
 const HASH_PREFIX: &str = "plan=";
 
@@ -20,22 +22,21 @@ pub fn encode(plan: &MealPlan) -> Option<String> {
     Some(URL_SAFE_NO_PAD.encode(json))
 }
 
-/// Decode a meal plan from the string produced by [`encode`]. The result is
-/// normalized to exactly seven days, whatever the link contained.
-pub fn decode(encoded: &str) -> Option<MealPlan> {
+/// Decode a meal plan from the string produced by [`encode`] (or any older
+/// link), as of `today`: past days are dropped (see [`PlanWire::into_plan`]).
+pub fn decode(encoded: &str, today: Date) -> Option<MealPlan> {
     let bytes = URL_SAFE_NO_PAD.decode(encoded).ok()?;
-    let mut plan: MealPlan = serde_json::from_slice(&bytes).ok()?;
-    plan.normalize();
-    Some(plan)
+    let wire: PlanWire = serde_json::from_slice(&bytes).ok()?;
+    Some(wire.into_plan(today))
 }
 
 /// Read the meal plan currently encoded in the URL hash, if any.
-pub fn read_hash() -> Option<MealPlan> {
+pub fn read_hash(today: Date) -> Option<MealPlan> {
     let hash = window().location().hash().ok()?;
     // `hash` includes the leading '#'.
     let raw = hash.strip_prefix('#').unwrap_or(&hash);
     let encoded = raw.strip_prefix(HASH_PREFIX)?;
-    decode(encoded)
+    decode(encoded, today)
 }
 
 /// The shareable link for a plan: `page_url` (origin + path, no fragment) plus
@@ -71,33 +72,49 @@ pub fn clear_hash() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::DAYS_PER_WEEK;
+
+    /// A Sunday.
+    fn today() -> Date {
+        Date::from_ymd(2026, 10, 25).unwrap()
+    }
 
     #[test]
     fn encode_decode_round_trip() {
         let mut plan = MealPlan::default();
-        plan.add_meal(3, "carbonara".into());
-        plan.set_servings(3, 0, Some(4));
+        let day = today().add_days(3);
+        plan.add_meal(day, "carbonara".into());
+        plan.set_servings(day, 0, Some(4));
         let encoded = encode(&plan).unwrap();
         assert!(!encoded.contains('=') && !encoded.contains('+') && !encoded.contains('/'));
-        assert_eq!(decode(&encoded), Some(plan));
+        assert_eq!(decode(&encoded, today()), Some(plan));
     }
 
     #[test]
-    fn decode_normalizes_short_plans_and_rejects_garbage() {
-        let short = URL_SAFE_NO_PAD.encode(br#"{"days":[{"lunch":"dal"}]}"#);
-        let plan = decode(&short).unwrap();
-        assert_eq!(plan.days.len(), DAYS_PER_WEEK);
-        assert_eq!(plan.meal(0, 0).unwrap().recipe, "dal");
+    fn old_weekday_links_decode_onto_dates_and_garbage_is_rejected() {
+        let old = URL_SAFE_NO_PAD.encode(br#"{"days":[{"lunch":"dal"}]}"#);
+        let plan = decode(&old, today()).unwrap();
+        assert_eq!(plan.meal(today().add_days(1), 0).unwrap().recipe, "dal");
+        assert_eq!(plan.meal_count(), 1);
 
-        assert_eq!(decode("not base64!"), None);
-        assert_eq!(decode(&URL_SAFE_NO_PAD.encode(b"{nope")), None);
+        assert_eq!(decode("not base64!", today()), None);
+        assert_eq!(decode(&URL_SAFE_NO_PAD.encode(b"{nope"), today()), None);
+    }
+
+    #[test]
+    fn a_link_opened_later_drops_the_days_that_passed() {
+        let mut plan = MealPlan::default();
+        plan.add_meal(today(), "soup".into());
+        plan.add_meal(today().add_days(2), "dal".into());
+        let encoded = encode(&plan).unwrap();
+        let later = decode(&encoded, today().add_days(1)).unwrap();
+        assert_eq!(later.meal_count(), 1);
+        assert_eq!(later.meal(today().add_days(2), 0).unwrap().recipe, "dal");
     }
 
     #[test]
     fn share_url_replaces_any_existing_fragment() {
         let mut plan = MealPlan::default();
-        plan.add_meal(0, "dal".into());
+        plan.add_meal(today(), "dal".into());
         let encoded = encode(&plan).unwrap();
         assert_eq!(
             share_url("https://ex.com/cooking-rs/planner", &plan).unwrap(),
