@@ -3,12 +3,14 @@ use leptos_router::components::A;
 
 use crate::app::{href, use_app_data};
 use crate::components::RecipeFilters;
-use crate::filter::{available_authors, available_cuisines, available_tags, filter, RecipeQuery};
+use crate::filter::{filter, RecipeQuery};
 use crate::format::format_total_time;
 use crate::models::Recipe;
+use crate::state::{read_search, write_search};
 
-/// Every recipe as a compact list with search and filter chips. A row opens the
-/// full recipe page.
+/// Every recipe as a compact list with search and the filter sheet. A row opens
+/// the full recipe page. The query lives in the address bar's query string, so
+/// it survives opening a recipe and coming back, and a filtered list can be sent.
 #[component]
 pub fn RecipesPage() -> impl IntoView {
     let data = use_app_data();
@@ -22,11 +24,9 @@ pub fn RecipesPage() -> impl IntoView {
 
 #[component]
 fn RecipeList(recipes: Vec<Recipe>) -> impl IntoView {
-    let cuisines = available_cuisines(&recipes);
-    let tags = available_tags(&recipes);
-    let authors = available_authors(&recipes);
     let recipes = StoredValue::new(recipes);
-    let query = RwSignal::new(RecipeQuery::default());
+    let query = RwSignal::new(RecipeQuery::from_query_string(&read_search()));
+    Effect::new(move |_| query.with(|q| write_search(&q.to_query_string())));
 
     // Pure filtering lives in `crate::filter`; the page just holds the query.
     let filtered = Memo::new(move |_| {
@@ -39,7 +39,7 @@ fn RecipeList(recipes: Vec<Recipe>) -> impl IntoView {
             <h1>"Recipes"</h1>
             <span class="mono muted">{move || filtered.with(|l| l.len())}</span>
         </header>
-        <RecipeFilters query=query authors=authors tags=tags cuisines=cuisines />
+        <RecipeFilters query=query recipes=recipes />
         <ul class="recipe-list">
             {move || {
                 let list = filtered.get();

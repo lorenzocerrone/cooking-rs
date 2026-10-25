@@ -422,10 +422,6 @@ h1 {
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
 }
 
-.chip--cuisine {
-  border-style: dashed;
-}
-
 .chip--on {
   background: var(--sienna-tint);
   color: var(--sienna);
@@ -441,6 +437,72 @@ h1 {
   width: 0.9em;
   height: 0.9em;
   color: var(--faint);
+}
+
+/* ---------- Filter sheet ---------- */
+.chip--filters {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.chip__count {
+  color: var(--faint);
+}
+
+.chip--on .chip__count {
+  color: inherit;
+  opacity: 0.7;
+}
+
+.chip--dim {
+  opacity: 0.45;
+}
+
+.filter-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.filter-section {
+  display: grid;
+  gap: 7px;
+}
+
+.filter-section__title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filter-section__hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+
+.filter-panel {
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--inset);
+}
+
+.filter-foot {
+  position: sticky;
+  bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 12px 0 calc(20px + env(safe-area-inset-bottom, 0px));
+  margin-bottom: calc(-20px - env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--rule);
+  background: var(--panel);
 }
 
 /* ---------- Recipes list ---------- */

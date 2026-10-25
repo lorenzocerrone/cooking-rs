@@ -9,8 +9,10 @@ the plan lives in the address bar, so sharing it is sending the link.
 
 ## Features
 
-- **Recipes** — every `recipes/*.json` file, with a thumbnail, search, and
-  cuisine/tag filters; a quick-view dialog and a full detail page with steps.
+- **Recipes** — every `recipes/*.json` file, with search and a filter sheet
+  (vegetarian or not, author, cuisine, time, tags; pick several at once); the
+  filters stay in the URL, so a filtered list can be sent too; a full detail page
+  with steps.
 - **Planner** — the next two weeks by date, from today; each day is a list of meals,
   added from a searchable picker or a recipe's "Add to week", with per-meal servings and
   a Share button. Past days drop off on their own.
@@ -118,7 +120,7 @@ Lentil Dal
 author: Lorenzo
 servings: 4
 cuisine: Indian
-tags: dinner, vegetarian
+tags: dinner
 prep: 10
 cook: 30
 
@@ -145,8 +147,9 @@ A leading number is the amount. The next word is the unit if it is one
 (`g kg ml l tsp tbsp cup pcs`) or the ingredient's piece label (`cloves`, `can`).
 A bare number counts pieces ("2 onion" is two onions), text after a comma is a
 note, and a line without an amount is "to taste". Every recipe needs an
-`author:` (the bundled ones say "Claude"), and the recipe list gets "by …"
-filter chips as soon as there are two authors. The scaffolder writes
+`author:` (the bundled ones say "Claude"), and the filter sheet gets an Author
+section as soon as there are two authors. The scaffolder adds the `vegetarian`
+tag itself when no ingredient is meat or fish. The scaffolder writes
 `recipes/<id>.json` and a placeholder `images/<id>.svg`. If anything is wrong
 (an unknown ingredient, a unit that doesn't convert), it lists every problem by
 line, prints a catalog entry to paste into `ingredients.json` for each unknown
@@ -183,7 +186,7 @@ src/
   quantity.rs       units, dimensions, piece specs, conversions (pure)
   recipes.rs        data loading boundary (embed today, fetch-ready)
   validate.rs       data validation tests (cargo test)
-  filter.rs         recipe search + cuisine/tag filtering (pure)
+  filter.rs         recipe search + multi-select filters, URL query (pure)
   shopping.rs       meal plan -> converted, summed, aisle-grouped grocery lines (pure)
   format.rs         display strings: quantities, rounding, text export (pure)
   state.rs          meal plan <-> URL hash (the address is the plan)

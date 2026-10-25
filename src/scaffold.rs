@@ -8,7 +8,7 @@
 //! author: Lorenzo
 //! servings: 4
 //! cuisine: Indian
-//! tags: dinner, vegetarian
+//! tags: dinner
 //!
 //! 300 g lentils
 //! 1 onion, finely chopped
@@ -22,6 +22,7 @@
 //! ```
 
 use crate::extras::{parse_number, suggest};
+use crate::filter::{meat_ingredients, VEGETARIAN_TAG};
 use crate::models::{CatalogIngredient, IngredientCatalog, Recipe, RecipeIngredient};
 use crate::quantity::{is_convertible, resolve_unit, Unit};
 
@@ -187,6 +188,17 @@ pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec
         recipe_meta.steps.push(TODO_STEP.into());
         warnings.push(format!(
             "no steps: wrote a `{TODO_STEP}` step; `cargo test` fails until it is replaced"
+        ));
+    }
+    // The Diet filter reads the tag; set it from the ingredients.
+    let meat = meat_ingredients(&recipe_meta, catalog).join(", ");
+    let tagged = recipe_meta.tags.iter().any(|t| t == VEGETARIAN_TAG);
+    if meat.is_empty() && !tagged {
+        recipe_meta.tags.push(VEGETARIAN_TAG.into());
+    } else if !meat.is_empty() && tagged {
+        recipe_meta.tags.retain(|t| t != VEGETARIAN_TAG);
+        warnings.push(format!(
+            "dropped the `{VEGETARIAN_TAG}` tag: it uses {meat}"
         ));
     }
     Ok(Draft {
@@ -563,6 +575,7 @@ mod tests {
         serde_json::from_str(
             r#"{
               "tomato":       { "name": "Tomato",       "unit": "g",   "category": "Produce", "count": { "per_piece": 120 } },
+              "chicken_breast": { "name": "Chicken breast", "unit": "g", "category": "Meat" },
               "onion":        { "name": "Onion",        "unit": "g",   "category": "Produce", "count": { "per_piece": 150 } },
               "red_onion":    { "name": "Red onion",    "unit": "g",   "category": "Produce", "count": { "per_piece": 100 } },
               "garlic":       { "name": "Garlic",       "unit": "g",   "category": "Produce", "count": { "label": "clove", "per_piece": 4 } },
@@ -687,6 +700,24 @@ mod tests {
         assert_eq!((r.prep_time, r.cook_time), (Some(10), Some(30)));
         assert_eq!(r.ingredients.len(), 3);
         assert_eq!(r.steps, vec!["Soften the onion.", "Simmer the lentils."]);
+    }
+
+    #[test]
+    fn the_vegetarian_tag_follows_the_ingredients() {
+        let veg = parse_draft("Eggs\nauthor: Me\n2 eggs\n\nSteps\nCook.\n", &catalog()).unwrap();
+        assert_eq!(veg.recipe.tags, vec!["vegetarian"]);
+        assert!(veg.warnings.is_empty());
+        let meat = parse_draft(
+            "Chicken\nauthor: Me\ntags: dinner, vegetarian\n300 g chicken breast\n\nSteps\nCook.\n",
+            &catalog(),
+        )
+        .unwrap();
+        assert_eq!(meat.recipe.tags, vec!["dinner"]);
+        assert!(
+            meat.warnings[0].contains("chicken_breast"),
+            "{:?}",
+            meat.warnings
+        );
     }
 
     #[test]

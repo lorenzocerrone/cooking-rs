@@ -141,8 +141,13 @@ src/
                     ShoppingLines {key, name, count, subtotals (base units, primary first),
                     to_taste, optional, sources, custom_quantities}; catalog extras folded
                     in unscaled, custom extras as `custom:*` lines in the "Other" aisle (last).
-  filter.rs         Pure LOGIC: RecipeQuery {search, cuisine, tag, author} + filter() and
-                    available_cuisines()/available_tags()/available_authors().
+  filter.rs         Pure LOGIC: RecipeQuery {search, diet, authors, cuisines, tags,
+                    max_minutes} + filter(): any-of within diet/author/cuisine, all-of for
+                    tags, AND across sections. FilterOption (one selectable value: toggle,
+                    is_on, label), option_count (per value, given the other sections),
+                    Facets::of (sections' values), to/from_query_string (the recipes page
+                    URL), Diet read from the `vegetarian` tag, meat_ingredients (catalog
+                    Meat/Fish aisles; the scaffolder sets the tag, validation checks it).
   extras.rs         Pure LOGIC for the free-text extras line: parse_extra ("milk 1 l" →
                     name + quantity), suggest (catalog matches), to_extra (catalog item when
                     the unit converts, otherwise a custom item kept as typed).
@@ -174,15 +179,19 @@ src/
                       optional title; closes on backdrop/Esc/button.
     toast.rs          One-line confirmation set via app::notify, auto-hides.
     stepper.rs        "− n +" control (servings).
-    recipe_filters.rs Search box + chip row ("by <author>" when there are 2+ authors, tags,
-                      cuisines) driving a RecipeQuery.
+    recipe_filters.rs Search box, "Filters · N" button and removable active-filter chips
+                      driving a RecipeQuery; the filter sheet (Diet, Author when there are
+                      2+ authors, Cuisine, Time, Tags; option counts; Clear / Show N), or
+                      `inline` sections inside the picker (no sheet on a sheet).
     recipe_picker.rs  Recipe picker sheet for a day; appends to the plan.
     add_to_week.rs    "Add to week" button + sheet of the rolling dates (recipe page).
     icons.rs          Inline SVG icons.
     mod.rs            also today() (local browser date) and rolling_dates(today, plan)
                       (14 days from today, or through the last planned day).
   pages/
-    recipes_page.rs       Compact list with search/filter chips; rows link to the recipe.
+    recipes_page.rs       Compact list with search + filter sheet; rows link to the recipe.
+                          The query lives in the URL's query string (state::read_search /
+                          write_search), so it survives a round trip to a recipe.
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
                           tappable steps (not persisted), AddToWeek.
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
@@ -280,7 +289,8 @@ recipe `id` equals the file stem and is unique; every recipe has an `author` ("C
 the generated ones, which the recipe filter can then separate from your own); every ingredient key exists; every unit
 resolves and converts into the ingredient's shopping unit; catalog units are base units;
 every recipe image exists on disk; no step is the scaffolder's `TODO`; every catalog category
-is an aisle in `shopping::CATEGORY_ORDER`.
+is an aisle in `shopping::CATEGORY_ORDER`; a recipe is tagged `vegetarian` exactly when no
+ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
 
 ## 6. Build, run, deploy
 
@@ -294,7 +304,8 @@ is an aisle in `shopping::CATEGORY_ORDER`.
 - **Author:** write a plain-text draft (see `src/scaffold.rs`) and run
   `cargo run --bin scaffold -- draft.txt` (`--dry-run` prints, `--force` overwrites). It
   writes `recipes/<id>.json` and a placeholder `images/<id>.svg`, or lists every problem by
-  line (unknown ingredients come with a catalog stub to paste) and writes nothing.
+  line (unknown ingredients come with a catalog stub to paste) and writes nothing. It sets
+  the `vegetarian` tag from the ingredients.
 - **Static build:** `trunk build --release` → `dist/`.
 - **Deploy:** push to `main` → `.github/workflows/deploy.yml` builds with
   `--public-url /cooking-rs/` and `APP_BASE_PATH=/cooking-rs` (asset base *and* router base
@@ -344,23 +355,24 @@ is an aisle in `shopping::CATEGORY_ORDER`.
   `#plan=` fragment and is rewritten on every change and navigation, so the address is always
   shareable; opening a link shows that plan (the preview banner and `own_plan` are gone);
   `localStorage` keeps the last plan, for the home-screen icon, and the device's grocery state.
+- **Phase 10 — Filter sheet.** Search plus a "Filters · N" button opening a sheet with Diet
+  (from the `vegetarian` tag, which the scaffolder sets and validation keeps honest),
+  Author, Cuisine, Time (≤20 / ≤40 min) and Tags; multi-select (any author/cuisine/diet,
+  all tags), per-value counts, removable chips for the active filters; inline in the picker.
+  On the recipes page the filters live in the query string, so they survive opening a recipe
+  and a filtered list can be sent.
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Filter sheet.** Search plus a "Filters · N" button opening a sheet with Diet
-   (vegetarian or meat & fish, from the `vegetarian` tag, which validation keeps honest),
-   Author, Cuisine, Time (≤20 / ≤40 min) and Tags; multi-select (any author/cuisine/diet,
-   all tags), option counts, removable chips for the active filters. On the recipes page the
-   filters live in the query string, so they survive opening a recipe and can be shared.
-2. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
+1. **Meal editing.** Move a meal to another date (shared date list with "Add to week"),
    reorder within a day with up/down, and a "Clear plan" sheet with "Meals only" (keeps
    extras and at-home items) or "Everything", replacing `window.confirm`. Both clear ticks.
-3. **Live with it.** A week of real planning and one shop on the phone; a fix round
+2. **Live with it.** A week of real planning and one shop on the phone; a fix round
    follows and re-prioritises the polish below.
-4. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
+3. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
-5. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
+4. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
 ### Later, on demand

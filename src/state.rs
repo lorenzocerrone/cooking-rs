@@ -88,6 +88,31 @@ pub fn write_hash(plan: &MealPlan) {
     }
 }
 
+/// The address bar's query string ("?tag=quick", or "").
+pub fn read_search() -> String {
+    window().location().search().unwrap_or_default()
+}
+
+/// Replace the address bar's query string (keeping the path and the plan
+/// fragment) without reloading or adding a history entry.
+pub fn write_search(search: &str) {
+    let location = window().location();
+    let (Ok(path), Ok(current), Ok(hash)) =
+        (location.pathname(), location.search(), location.hash())
+    else {
+        return;
+    };
+    if current == search {
+        return;
+    }
+    if let Ok(history) = window().history() {
+        let state = history
+            .state()
+            .unwrap_or(leptos::wasm_bindgen::JsValue::NULL);
+        let _ = history.replace_state_with_url(&state, "", Some(&format!("{path}{search}{hash}")));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

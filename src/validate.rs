@@ -9,6 +9,7 @@
 use std::collections::HashSet;
 use std::path::Path;
 
+use crate::filter::{meat_ingredients, VEGETARIAN_TAG};
 use crate::models::{IngredientCatalog, Recipe};
 use crate::quantity::{is_convertible, resolve_unit, Unit};
 use crate::recipes::{parse_catalog, recipe_files};
@@ -112,6 +113,31 @@ fn every_recipe_ingredient_exists_in_catalog() {
         }
     }
     assert_no_problems("ingredient references", problems);
+}
+
+#[test]
+fn vegetarian_tag_matches_the_ingredients() {
+    // The Diet filter reads the tag, so it must say exactly what the
+    // ingredients say: tagged if and only if nothing comes from a meat aisle.
+    let catalog = catalog();
+    let mut problems = Vec::new();
+    for r in recipes() {
+        let meat = meat_ingredients(&r, &catalog);
+        let tagged = r.tags.iter().any(|t| t == VEGETARIAN_TAG);
+        if tagged && !meat.is_empty() {
+            problems.push(format!(
+                "{}: tagged `{VEGETARIAN_TAG}` but uses {}",
+                r.id,
+                meat.join(", ")
+            ));
+        } else if !tagged && meat.is_empty() {
+            problems.push(format!(
+                "{}: no meat or fish, add the `{VEGETARIAN_TAG}` tag",
+                r.id
+            ));
+        }
+    }
+    assert_no_problems("vegetarian tag", problems);
 }
 
 #[test]

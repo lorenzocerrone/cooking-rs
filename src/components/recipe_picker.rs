@@ -3,7 +3,7 @@ use leptos::prelude::*;
 use crate::app::{notify, use_today};
 use crate::components::{Modal, RecipeFilters};
 use crate::date::Date;
-use crate::filter::{available_authors, available_cuisines, available_tags, filter, RecipeQuery};
+use crate::filter::{filter, RecipeQuery};
 use crate::format::{format_day_inline, format_total_time};
 use crate::models::{MealPlan, Recipe};
 
@@ -17,9 +17,6 @@ pub fn RecipePicker(
     recipes: StoredValue<Vec<Recipe>>,
     plan: RwSignal<MealPlan>,
 ) -> impl IntoView {
-    let cuisines = StoredValue::new(recipes.with_value(|rs| available_cuisines(rs)));
-    let tags = StoredValue::new(recipes.with_value(|rs| available_tags(rs)));
-    let authors = StoredValue::new(recipes.with_value(|rs| available_authors(rs)));
     let query = RwSignal::new(RecipeQuery::default());
     let today = use_today();
 
@@ -39,12 +36,7 @@ pub fn RecipePicker(
 
     view! {
         <Modal open=open title=title>
-            <RecipeFilters
-                query=query
-                authors=authors.get_value()
-                tags=tags.get_value()
-                cuisines=cuisines.get_value()
-            />
+            <RecipeFilters query=query recipes=recipes inline=true />
             <div class="pick-list">
                 {move || {
                     let list = filtered();
