@@ -39,7 +39,12 @@ pub fn Nav() -> impl IntoView {
         <nav class="nav" class:nav--hidden=on_recipe>
             <span class="nav__brand">
                 "cooking-rs"
-                <small>"weekly planner"</small>
+                <small>
+                    {match crate::app::PREVIEW {
+                        Some(p) => format!("preview · {p}"),
+                        None => "weekly planner".to_string(),
+                    }}
+                </small>
             </span>
             <A href=href("/") exact=true attr:class="nav__tab">
                 <IconBook />

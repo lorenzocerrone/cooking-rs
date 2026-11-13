@@ -358,10 +358,19 @@ units that won't add up are reported, not failed.
 - **Static build:** `trunk build --release` → `dist/`.
 - **Deploy:** push to `main` → `.github/workflows/deploy.yml` builds with
   `--public-url /cooking-rs/` and `APP_BASE_PATH=/cooking-rs` (asset base *and* router base
-  must match), copies `index.html → 404.html` for SPA deep-link fallback, and publishes to
-  GitHub Pages. Requires Pages to be enabled with **Source: GitHub Actions** in the repo
-  settings. The base path is the one value to keep in sync if the repo is renamed or a
+  must match), writes `404.html` (`.github/scripts/spa_fallback.py`: the index plus a redirect
+  for preview deep links) and publishes `dist/` to the root of the `gh-pages` branch, leaving
+  `pr-preview/` alone. Pages serves that branch (**Source: Deploy from a branch → gh-pages,
+  / (root)**). The base path is the one value to keep in sync if the repo is renamed or a
   root/custom-domain page is used (then `/` and `""`).
+- **PR previews:** `.github/workflows/preview.yml` builds every same-repo pull request with
+  `APP_BASE_PATH=/cooking-rs/pr-preview/pr-N` and `APP_PREVIEW=pr-N`, publishes it to
+  `gh-pages/pr-preview/pr-N/` and comments the link (`rossjrw/pr-preview-action`), and
+  removes it when the PR closes. `APP_PREVIEW` (`app::PREVIEW`) namespaces the localStorage
+  keys, skips the service worker (the live app's worker scope covers the preview) and shows
+  "preview · pr-N" in the nav. Pages serves only the site-wide `404.html`, so a deep link in
+  a preview is redirected to the preview's root with `?path=…`, which `main.rs` puts back
+  before the router starts (`app::redirected_path`).
 - **PWA assets:** `manifest.webmanifest`, `sw.js`, and `icons/` are copied into `dist/` via
   `data-trunk` directives in `index.html`; the service worker is network-first with a cache
   fallback and only caches successful same-origin responses. Fonts (Space Grotesk, Space
@@ -435,6 +444,11 @@ units that won't add up are reported, not failed.
   unknown names and units that won't add up are warnings and a report
   (`cargo run --bin ingredients`), not failures. The 25 recipes were migrated with an
   identical grocery list for each (and all together) before and after.
+
+- **Phase 14 — PR previews.** Every pull request is built and published to
+  `/cooking-rs/pr-preview/pr-N/` with its link on the PR, kept apart from the live app (own
+  saved data, no service worker, a "preview" mark); deep links survive a reload. The live
+  site moved from the Pages artifact to the `gh-pages` branch to share it with previews.
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).

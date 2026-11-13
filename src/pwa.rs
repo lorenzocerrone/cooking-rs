@@ -29,7 +29,9 @@ pub fn setup() {
     // machine). Only register in production. On localhost we skip registration; the
     // worker also self-unregisters there (see `sw.js`) so any left over from an
     // earlier session is torn down on the next load.
-    if is_local_dev() {
+    // A pull-request preview lives under the real app's scope on the same site;
+    // a worker of its own would share (and clear) the real app's caches.
+    if is_local_dev() || crate::app::PREVIEW.is_some() {
         return;
     }
 

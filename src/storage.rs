@@ -24,6 +24,18 @@ pub const SCHEMA_VERSION: u32 = 3;
 
 const STORAGE_KEY: &str = "cooking-rs.state";
 
+/// A localStorage key, kept apart for a pull-request preview build so it never
+/// reads or overwrites the real app's data on the same site.
+fn key(name: &str) -> String {
+    match crate::app::PREVIEW {
+        Some(preview) => format!(
+            "cooking-rs.{preview}.{}",
+            name.trim_start_matches("cooking-rs.")
+        ),
+        None => name.to_string(),
+    }
+}
+
 /// Everything persisted locally. Written as is; read back through
 /// [`StoredWire`] so older payloads (weekday plans, v2 and before) migrate.
 #[derive(Clone, Debug, Default, Serialize, PartialEq)]
@@ -237,7 +249,7 @@ pub fn load(today: Date) -> Option<PersistedState> {
     let raw = leptos::prelude::window()
         .local_storage()
         .ok()??
-        .get_item(STORAGE_KEY)
+        .get_item(&key(STORAGE_KEY))
         .ok()??;
     decode(&raw, today)
 }
@@ -246,7 +258,7 @@ pub fn load(today: Date) -> Option<PersistedState> {
 pub fn save(state: &PersistedState) {
     if let (Some(raw), Ok(Some(store))) = (encode(state), leptos::prelude::window().local_storage())
     {
-        let _ = store.set_item(STORAGE_KEY, &raw);
+        let _ = store.set_item(&key(STORAGE_KEY), &raw);
     }
 }
 
@@ -259,7 +271,7 @@ pub fn load_form() -> RecipeForm {
         .local_storage()
         .ok()
         .flatten()
-        .and_then(|store| store.get_item(FORM_KEY).ok().flatten())
+        .and_then(|store| store.get_item(&key(FORM_KEY)).ok().flatten())
         .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default()
 }
@@ -269,8 +281,8 @@ pub fn load_form() -> RecipeForm {
 pub fn save_form(form: &RecipeForm) {
     if let Ok(Some(store)) = leptos::prelude::window().local_storage() {
         let _ = match serde_json::to_string(form) {
-            Ok(raw) if !form.is_blank() => store.set_item(FORM_KEY, &raw),
-            _ => store.remove_item(FORM_KEY),
+            Ok(raw) if !form.is_blank() => store.set_item(&key(FORM_KEY), &raw),
+            _ => store.remove_item(&key(FORM_KEY)),
         };
     }
 }

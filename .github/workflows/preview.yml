@@ -1,0 +1,63 @@
+name: PR preview
+
+# Every pull request from this repository gets its own copy of the site at
+# https://<user>.github.io/cooking-rs/pr-preview/pr-<number>/, rebuilt on each
+# push and removed when the PR is closed. The link is posted on the PR.
+#
+# Requires GitHub Pages to serve the `gh-pages` branch (Settings → Pages →
+# Build and deployment → Source: Deploy from a branch → gh-pages, / (root));
+# deploy.yml publishes the live site to the same branch, around pr-preview/.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+permissions:
+  contents: write # push the preview to gh-pages
+  pull-requests: write # comment the preview link
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    # Pull requests from forks get a read-only token and can't publish.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust (wasm target)
+        if: github.event.action != 'closed'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo + target
+        if: github.event.action != 'closed'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Trunk
+        if: github.event.action != 'closed'
+        run: |
+          wget -qO- https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
+            | sudo tar -xzf - -C /usr/local/bin
+
+      # Same build as the live site, under the preview's path. APP_PREVIEW keeps
+      # the preview's saved data apart from the live app's and skips the
+      # service worker (both share the site).
+      - name: Build
+        if: github.event.action != 'closed'
+        env:
+          APP_BASE_PATH: /${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.number }}
+          APP_PREVIEW: pr-${{ github.event.number }}
+        run: trunk build --release --public-url "$APP_BASE_PATH/"
+
+      - name: Publish or remove the preview
+        uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: dist
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto

@@ -19,6 +19,50 @@ pub const BASE_PATH: &str = match option_env!("APP_BASE_PATH") {
     None => "",
 };
 
+/// Set (to e.g. `pr-12`) only in a pull request's preview build, which is
+/// served under `/cooking-rs/pr-preview/pr-12/`: the preview keeps its own
+/// local data and registers no service worker, so it can't disturb the real
+/// app on the same site.
+pub const PREVIEW: Option<&str> = option_env!("APP_PREVIEW");
+
+/// The in-app path a GitHub Pages 404 fallback sent us to: the fallback page
+/// redirects a deep link under a preview (`…/pr-12/planner`) to the preview's
+/// root with `?path=/planner`, because Pages only serves the site-wide
+/// `404.html`. Returns the path (with any query it carried) to restore.
+pub fn redirected_path(search: &str) -> Option<String> {
+    let query = search.strip_prefix('?').unwrap_or(search);
+    query.split('&').find_map(|pair| {
+        let value = pair.strip_prefix("path=")?;
+        let path = js_free_percent_decode(value)?;
+        path.starts_with('/').then_some(path)
+    })
+}
+
+/// Percent-decoding without the browser (so it is host-testable).
+fn js_free_percent_decode(s: &str) -> Option<String> {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => {
+                let hex = s.get(i + 1..i + 3)?;
+                out.push(u8::from_str_radix(hex, 16).ok()?);
+                i += 3;
+            }
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b => {
+                out.push(b);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).ok()
+}
+
 /// Prefix an absolute in-app route with a deploy base path. `leptos_router`
 /// applies `Router base` to route *matching* only: an `<A href="/planner">` is
 /// emitted verbatim, which under `/cooking-rs/` would leave the app. Every
@@ -139,7 +183,19 @@ pub fn use_app_data() -> DataResource {
 
 #[cfg(test)]
 mod tests {
-    use super::route_url;
+    use super::{redirected_path, route_url};
+
+    #[test]
+    fn a_fallback_redirect_gives_back_the_path() {
+        assert_eq!(redirected_path("?path=%2Fplanner"), Some("/planner".into()));
+        assert_eq!(
+            redirected_path("?x=1&path=%2Frecipe%2Fdal%3Fq%3Dlentil"),
+            Some("/recipe/dal?q=lentil".into())
+        );
+        assert_eq!(redirected_path("?q=1"), None);
+        assert_eq!(redirected_path("?path=https%3A%2F%2Fevil.example"), None);
+        assert_eq!(redirected_path(""), None);
+    }
 
     #[test]
     fn route_url_prefixes_base_path() {

@@ -170,10 +170,17 @@ dictionary doesn't know and units the grocery list can't add up are warnings.
 ## Deploy (GitHub Pages)
 
 Pushing to `main` runs `.github/workflows/deploy.yml`, which builds with the
-correct base path and publishes `dist/` to GitHub Pages.
+correct base path and publishes `dist/` to the root of the `gh-pages` branch.
+
+Every pull request gets a preview: `.github/workflows/preview.yml` builds it to
+`https://<user>.github.io/cooking-rs/pr-preview/pr-<number>/`, comments the link
+on the PR, rebuilds on each push and removes it when the PR closes. A preview says
+"preview · pr-N" under the logo, keeps its own saved plan and drafts, and has no
+offline service worker, so trying it can't touch the live app's data.
 
 One-time setup: in the repo, **Settings → Pages → Build and deployment → Source:
-GitHub Actions** (without this the deploy job fails).
+Deploy from a branch → `gh-pages`, `/ (root)`**. The branch appears after the
+first deploy from `main`.
 
 The base path assumes a project page at `https://<user>.github.io/cooking-rs/`.
 If you rename the repo or use a user/root or custom-domain page, update **both**
