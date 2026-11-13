@@ -104,7 +104,8 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
                 parsed
                     .get()
                     .map(|result| match result {
-                        Err(problems) => {
+                        Err(mut problems) => {
+                            problems.sort_by_key(|p| p.line);
                             let count = problems.len();
                             view! {
                                 <section class="draft-check draft-check--bad" aria-live="polite">
