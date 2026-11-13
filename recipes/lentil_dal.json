@@ -10,15 +10,15 @@
   "prep_time": 10,
   "cook_time": 30,
   "ingredients": [
-    { "ingredient": "lentils", "amount": 300 },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
-    { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
-    { "ingredient": "tomato", "amount": 200 },
-    { "ingredient": "coconut_milk", "amount": 0.5, "unit": "can" },
-    { "ingredient": "curry_powder", "amount": 10 },
-    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "rice", "amount": 240 },
-    { "ingredient": "salt" }
+    { "name": "Lentils", "amount": 300, "unit": "g" },
+    { "name": "Onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "name": "Garlic", "amount": 3, "unit": "cloves" },
+    { "name": "Tomato", "amount": 200, "unit": "g" },
+    { "name": "Coconut milk", "amount": 0.5, "unit": "can" },
+    { "name": "Curry powder", "amount": 10, "unit": "g" },
+    { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Rice", "amount": 240, "unit": "g" },
+    { "name": "Salt" }
   ],
   "steps": [
     "Soften the onion and garlic in olive oil, then stir in the curry powder.",

@@ -3,16 +3,13 @@ use leptos_router::components::A;
 
 use crate::app::{href, notify, use_app_data};
 use crate::components::{IconBack, IconClose, IconPlus, Modal, Stepper};
-use crate::editor::{
-    fit_unit, unit_choices, Field, IngredientRow, Issue, Measure, NewIngredient, RecipeForm,
-};
+use crate::editor::{unit_suggestions, Field, IngredientRow, Issue, RecipeForm};
 use crate::extras::suggest;
 use crate::filter::{Facets, VEGETARIAN_TAG};
 use crate::models::{IngredientCatalog, Recipe};
 use crate::pages::RecipeBody;
 use crate::paste::form_from_text;
-use crate::scaffold::{render_json, slug};
-use crate::shopping::CATEGORY_ORDER;
+use crate::scaffold::render_json;
 use crate::storage::{load_form, save_form};
 
 /// Suggestions shown under an ingredient being typed.
@@ -36,16 +33,16 @@ pub fn NewRecipePage() -> impl IntoView {
     }
 }
 
-/// Everything a part of the editor needs: the form and the catalogs.
+/// Everything a part of the editor needs: the form and the dictionary.
 #[derive(Clone, Copy)]
 struct Editor {
     form: RwSignal<RecipeForm>,
-    /// The catalog plus this form's new ingredients.
-    catalog: Memo<IngredientCatalog>,
+    /// The ingredient dictionary: suggestions and unit hints.
+    catalog: StoredValue<IngredientCatalog>,
     /// The checked recipe, or what is still missing.
     result: Memo<Result<Recipe, Vec<Issue>>>,
-    /// Which row the "new ingredient" sheet is for.
-    new_for: RwSignal<Option<usize>>,
+    /// The ingredient row being typed in (its suggestions are shown).
+    focused: RwSignal<Option<usize>>,
 }
 
 impl Editor {
@@ -62,18 +59,6 @@ impl Editor {
             }
         });
     }
-
-    /// Set row `i` to the catalog ingredient `key`, keeping a typed unit that fits.
-    fn pick(self, i: usize, key: String) {
-        let info = self.catalog.with_untracked(|c| c.get(&key).cloned());
-        if let Some(info) = info {
-            self.update_row(i, |row| {
-                row.name = info.name.clone();
-                row.unit = fit_unit(&row.unit, &info);
-                row.key = Some(key);
-            });
-        }
-    }
 }
 
 #[component]
@@ -81,14 +66,13 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
     let form = RwSignal::new(load_form());
     Effect::new(move |_| form.with(save_form));
 
-    let base = StoredValue::new(catalog);
-    let full = Memo::new(move |_| form.with(|f| base.with_value(|b| f.catalog_with(b))));
-    let result = Memo::new(move |_| form.with(|f| base.with_value(|b| f.to_recipe(b))));
+    let catalog = StoredValue::new(catalog);
+    let result = Memo::new(move |_| form.with(|f| catalog.with_value(|c| f.to_recipe(c))));
     let ed = Editor {
         form,
-        catalog: full,
+        catalog,
         result,
-        new_for: RwSignal::new(None),
+        focused: RwSignal::new(None),
     };
     let facets = StoredValue::new(Facets::of(&recipes));
     let recipes = StoredValue::new(recipes);
@@ -103,18 +87,7 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
         let Ok(recipe) = result.get_untracked() else {
             return;
         };
-        let mut text = render_json(&recipe);
-        let new_lines: Vec<String> = form.with_untracked(|f| {
-            f.used_new_ingredients()
-                .into_iter()
-                .map(NewIngredient::catalog_line)
-                .collect()
-        });
-        if !new_lines.is_empty() {
-            text.push_str("\nNew in ingredients.json:\n");
-            text.push_str(&new_lines.join("\n"));
-            text.push('\n');
-        }
+        let text = render_json(&recipe);
         let _ = window().navigator().clipboard().write_text(&text);
         notify("Recipe copied");
     };
@@ -183,14 +156,13 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
                         view! {
                             <p class="eyebrow">"Preview"</p>
                             <article class="recipe recipe--preview">
-                                <RecipeBody recipe=recipe catalog=full.get() />
+                                <RecipeBody recipe=recipe catalog=catalog.get_value() />
                             </article>
                         }
                     })
             }}
         </article>
 
-        <NewIngredientSheet ed=ed />
         <PasteSheet ed=ed open=paste_open />
 
         <Modal open=start_over title="Start over?">
@@ -253,7 +225,7 @@ fn About(ed: Editor, facets: StoredValue<Facets>) -> impl IntoView {
     let new_tag = RwSignal::new(String::new());
     let add_tag = move || {
         let tag = new_tag.get_untracked().trim().to_lowercase();
-        if !tag.is_empty() && tag != VEGETARIAN_TAG {
+        if !tag.is_empty() {
             form.update(|f| {
                 if !f.tags.contains(&tag) {
                     f.tags.push(tag);
@@ -263,7 +235,8 @@ fn About(ed: Editor, facets: StoredValue<Facets>) -> impl IntoView {
         new_tag.set(String::new());
     };
     let tag_options = move || {
-        let mut all = facets.with_value(|f| f.tags.clone());
+        let mut all = vec![VEGETARIAN_TAG.to_string()];
+        all.extend(facets.with_value(|f| f.tags.clone()));
         form.with(|f| {
             for t in &f.tags {
                 if !all.contains(t) {
@@ -364,7 +337,7 @@ fn About(ed: Editor, facets: StoredValue<Facets>) -> impl IntoView {
                     on:change=move |_| add_tag()
                 />
                 <p class="field__hint">
-                    "“vegetarian” is added for you when there is no meat or fish."
+                    "“vegetarian” is set for you when every ingredient is in the list; tap it yourself otherwise."
                 </p>
             </div>
             <datalist id="authors">
@@ -407,12 +380,41 @@ fn Ingredients(ed: Editor) -> impl IntoView {
     }
 }
 
+/// One ingredient: a name (any; the dictionary suggests), amount and unit,
+/// note and optional.
 #[component]
 fn IngredientRowView(ed: Editor, i: usize) -> impl IntoView {
-    let picked = Memo::new(move |_| {
-        ed.form
-            .with(|f| f.ingredients.get(i).and_then(|r| r.key.clone()))
+    let name = Memo::new(move |_| ed.row(i).name);
+    let known = Memo::new(move |_| {
+        let n = name.get();
+        ed.catalog.with_value(|c| {
+            c.lookup(&n)
+                .map(|(_, x)| (x.name.clone(), x.category.clone()))
+        })
     });
+    let suggestions = Memo::new(move |_| {
+        let n = name.get();
+        let exact = known.with(|k| k.as_ref().map(|(name, _)| name.clone()));
+        ed.catalog.with_value(|c| {
+            suggest(c, &n, SUGGESTIONS)
+                .into_iter()
+                .filter(|s| Some(&s.name) != exact.as_ref())
+                .collect::<Vec<_>>()
+        })
+    });
+    let show_suggestions =
+        move || ed.focused.get() == Some(i) && suggestions.with(|s| !s.is_empty());
+    let row = move || ed.row(i);
+    let issue = move || {
+        ed.result.with(|r| {
+            r.as_ref()
+                .err()
+                .and_then(|issues| issues.iter().find(|x| x.field == Field::Ingredient(i)))
+                .map(|x| x.message.clone())
+        })
+    };
+    let hint = move || ed.form.with(|f| ed.catalog.with_value(|c| f.hint(i, c)));
+    let units_id = format!("units-{i}");
     let remove = move |_| {
         ed.form.update(|f| {
             if i < f.ingredients.len() {
@@ -423,182 +425,130 @@ fn IngredientRowView(ed: Editor, i: usize) -> impl IntoView {
 
     view! {
         <li class="ing-row">
-            <Show
-                when=move || picked.with(Option::is_some)
-                fallback=move || view! { <IngredientSearch ed=ed i=i /> }
-            >
-                <PickedIngredient ed=ed i=i picked=picked />
-            </Show>
+            <div class="ing-row__body">
+                <div class="ing-row__name">
+                    <input
+                        type="text"
+                        class="field__input"
+                        placeholder="Ingredient, e.g. lentils"
+                        aria-label="Ingredient"
+                        autocomplete="off"
+                        prop:value=move || name.get()
+                        on:input=move |ev| {
+                            let v = event_target_value(&ev);
+                            ed.update_row(i, |r| r.name = v);
+                        }
+                        on:focus=move |_| ed.focused.set(Some(i))
+                        on:blur=move |_| {
+                            if ed.focused.get_untracked() == Some(i) {
+                                ed.focused.set(None);
+                            }
+                        }
+                    />
+                    {move || {
+                        known
+                            .get()
+                            .map(|(_, aisle)| view! { <small class="eyebrow">{aisle}</small> })
+                    }}
+                </div>
+                <Show when=show_suggestions>
+                    <div class="suggest">
+                        {move || {
+                            suggestions
+                                .get()
+                                .into_iter()
+                                .enumerate()
+                                .map(|(n, s)| {
+                                    let chosen = s.name.clone();
+                                    view! {
+                                        <button
+                                            type="button"
+                                            class="suggest__row"
+                                            class:suggest__row--first=n == 0
+                                            // Keep the focus in the field until the click lands.
+                                            on:mousedown=|e| e.prevent_default()
+                                            on:click=move |_| {
+                                                let chosen = chosen.clone();
+                                                ed.update_row(i, |r| r.name = chosen);
+                                                ed.focused.set(None);
+                                            }
+                                        >
+                                            <span>{s.name}</span>
+                                            <span class="eyebrow">{s.category}</span>
+                                        </button>
+                                    }
+                                })
+                                .collect_view()
+                        }}
+                    </div>
+                </Show>
+                <div class="ing-row__qty">
+                    <input
+                        type="text"
+                        inputmode="decimal"
+                        class="field__input"
+                        placeholder="to taste"
+                        aria-label="Amount"
+                        prop:value=move || row().amount
+                        on:input=move |ev| {
+                            let v = event_target_value(&ev);
+                            ed.update_row(i, |r| r.amount = v);
+                        }
+                    />
+                    <input
+                        type="text"
+                        class="field__input"
+                        placeholder="unit"
+                        aria-label="Unit"
+                        autocomplete="off"
+                        list=units_id.clone()
+                        prop:disabled=move || row().amount.trim().is_empty()
+                        prop:value=move || row().unit
+                        on:input=move |ev| {
+                            let v = event_target_value(&ev);
+                            ed.update_row(i, |r| r.unit = v);
+                        }
+                    />
+                    <datalist id=units_id>
+                        {move || {
+                            let n = name.get();
+                            ed.catalog
+                                .with_value(|c| unit_suggestions(&n, c))
+                                .into_iter()
+                                .map(|u| view! { <option value=u /> })
+                                .collect_view()
+                        }}
+                    </datalist>
+                </div>
+                <input
+                    type="text"
+                    class="field__input field__input--small"
+                    placeholder="Note, e.g. finely chopped"
+                    aria-label="Note"
+                    prop:value=move || row().note
+                    on:input=move |ev| {
+                        let v = event_target_value(&ev);
+                        ed.update_row(i, |r| r.note = v);
+                    }
+                />
+                <label class="toggle">
+                    <input
+                        type="checkbox"
+                        prop:checked=move || row().optional
+                        on:change=move |ev| {
+                            let on = event_target_checked(&ev);
+                            ed.update_row(i, |r| r.optional = on);
+                        }
+                    />
+                    "Optional"
+                </label>
+                {move || issue().map(|m| view! { <p class="form-warn">{m}</p> })}
+                {move || hint().map(|m| view! { <p class="field__hint">{m}</p> })}
+            </div>
             <button type="button" class="icon-btn" aria-label="Remove ingredient" on:click=remove>
                 <IconClose />
             </button>
         </li>
-    }
-}
-
-/// A row with no ingredient yet: type, then pick a suggestion or add a new one.
-#[component]
-fn IngredientSearch(ed: Editor, i: usize) -> impl IntoView {
-    let name = Memo::new(move |_| ed.row(i).name);
-    let suggestions = move || {
-        let typed = name.get();
-        ed.catalog.with(|c| suggest(c, &typed, SUGGESTIONS))
-    };
-    view! {
-        <div class="ing-row__body">
-            <input
-                type="text"
-                class="field__input"
-                placeholder="Ingredient, e.g. lentils"
-                aria-label="Ingredient"
-                autocomplete="off"
-                prop:value=move || name.get()
-                on:input=move |ev| {
-                    let v = event_target_value(&ev);
-                    ed.update_row(i, |r| r.name = v);
-                }
-            />
-            <Show when=move || !name.with(|n| n.trim().is_empty())>
-                <div class="suggest">
-                    {move || {
-                        suggestions()
-                            .into_iter()
-                            .enumerate()
-                            .map(|(n, s)| {
-                                let key = s.key.clone();
-                                view! {
-                                    <button
-                                        type="button"
-                                        class="suggest__row"
-                                        class:suggest__row--first=n == 0
-                                        on:click=move |_| ed.pick(i, key.clone())
-                                    >
-                                        <span>{s.name}</span>
-                                        <span class="eyebrow">{s.category}</span>
-                                    </button>
-                                }
-                            })
-                            .collect_view()
-                    }}
-                    <button
-                        type="button"
-                        class="suggest__row"
-                        on:click=move |_| ed.new_for.set(Some(i))
-                    >
-                        <span>{move || format!("New ingredient “{}”…", name.get().trim())}</span>
-                        <span class="eyebrow">"Add"</span>
-                    </button>
-                </div>
-            </Show>
-        </div>
-    }
-}
-
-/// A row with its ingredient chosen: amount and unit, note, optional.
-#[component]
-fn PickedIngredient(ed: Editor, i: usize, picked: Memo<Option<String>>) -> impl IntoView {
-    let info = move || {
-        picked
-            .get()
-            .and_then(|k| ed.catalog.with(|c| c.get(&k).cloned()))
-    };
-    let row = move || ed.row(i);
-    let issue = move || {
-        ed.result.with(|r| {
-            r.as_ref()
-                .err()
-                .and_then(|issues| issues.iter().find(|x| x.field == Field::Ingredient(i)))
-                .map(|x| x.message.clone())
-        })
-    };
-    view! {
-        <div class="ing-row__body">
-            <button
-                type="button"
-                class="ing-row__name"
-                title="Change the ingredient"
-                on:click=move |_| ed.update_row(i, |r| r.key = None)
-            >
-                {move || info().map(|x| x.name).unwrap_or_default()}
-                <small class="muted">
-                    {move || info().map(|x| format!(" · {}", x.category)).unwrap_or_default()}
-                </small>
-            </button>
-            <div class="ing-row__qty">
-                <input
-                    type="text"
-                    inputmode="decimal"
-                    class="field__input"
-                    placeholder="to taste"
-                    aria-label="Amount"
-                    prop:value=move || row().amount
-                    on:input=move |ev| {
-                        let v = event_target_value(&ev);
-                        ed.update_row(i, |r| r.amount = v);
-                    }
-                />
-                <select
-                    class="field__input"
-                    aria-label="Unit"
-                    prop:disabled=move || row().amount.trim().is_empty()
-                    on:change=move |ev| {
-                        let v = event_target_value(&ev);
-                        ed.update_row(i, |r| r.unit = v);
-                    }
-                >
-                    {move || {
-                        let current = row().unit;
-                        let choices = info().map(|x| unit_choices(&x)).unwrap_or_default();
-                        // A pasted unit that doesn't work for this ingredient
-                        // stays visible until another one is chosen.
-                        let stray = (!current.is_empty()
-                            && !choices.iter().any(|c| c.value == current))
-                            .then(|| {
-                                view! {
-                                    <option value=current.clone() selected=true disabled=true>
-                                        {format!("{current}?")}
-                                    </option>
-                                }
-                            });
-                        let options = choices
-                            .into_iter()
-                            .map(|c| {
-                                let selected = c.value == current;
-                                view! {
-                                    <option value=c.value selected=selected>
-                                        {c.label}
-                                    </option>
-                                }
-                            })
-                            .collect_view();
-                        (stray, options)
-                    }}
-                </select>
-            </div>
-            <input
-                type="text"
-                class="field__input field__input--small"
-                placeholder="Note, e.g. finely chopped"
-                aria-label="Note"
-                prop:value=move || row().note
-                on:input=move |ev| {
-                    let v = event_target_value(&ev);
-                    ed.update_row(i, |r| r.note = v);
-                }
-            />
-            <label class="toggle">
-                <input
-                    type="checkbox"
-                    prop:checked=move || row().optional
-                    on:change=move |ev| {
-                        let on = event_target_checked(&ev);
-                        ed.update_row(i, |r| r.optional = on);
-                    }
-                />
-                "Optional"
-            </label>
-            {move || issue().map(|m| view! { <p class="form-warn">{m}</p> })}
-        </div>
     }
 }
 
@@ -671,152 +621,6 @@ fn ToFinish(issues: Vec<Issue>) -> impl IntoView {
     }
 }
 
-/// The sheet for an ingredient that isn't in the catalog yet: its name, aisle
-/// and how it is measured.
-#[component]
-fn NewIngredientSheet(ed: Editor) -> impl IntoView {
-    let open = RwSignal::new(false);
-    let name = RwSignal::new(String::new());
-    let aisle = RwSignal::new(String::new());
-    let measure = RwSignal::new(Measure::Weight);
-
-    // Opening for a row fills the name in from what was typed there.
-    Effect::new(move |_| {
-        if let Some(i) = ed.new_for.get() {
-            // Untracked: picking the ingredient changes the row, which must not
-            // reopen the sheet.
-            let typed = ed.form.with_untracked(|f| {
-                f.ingredients
-                    .get(i)
-                    .map(|r| r.name.trim().to_string())
-                    .unwrap_or_default()
-            });
-            name.set(typed);
-            aisle.set(String::new());
-            measure.set(Measure::Weight);
-            open.set(true);
-        }
-    });
-    Effect::new(move |_| {
-        if !open.get() {
-            ed.new_for.set(None);
-        }
-    });
-
-    // Typing a name the catalog already has just uses that ingredient.
-    let existing = move || {
-        let key = slug(&name.get());
-        ed.catalog.with(|c| c.get(&key).map(|x| x.name.clone()))
-    };
-    let add = move |_| {
-        let Some(i) = ed.new_for.get_untracked() else {
-            return;
-        };
-        let n = NewIngredient::new(
-            &name.get_untracked(),
-            &aisle.get_untracked(),
-            measure.get_untracked(),
-        );
-        let key = n.key.clone();
-        ed.new_for.set(None);
-        if ed.catalog.with_untracked(|c| c.get(&key).is_none()) {
-            ed.form.update(|f| f.new_ingredients.push(n));
-        }
-        ed.pick(i, key);
-        open.set(false);
-    };
-    let ready =
-        move || !slug(&name.get()).is_empty() && (existing().is_some() || !aisle.get().is_empty());
-
-    view! {
-        <Modal open=open title="New ingredient">
-            <div class="sheet-form">
-                <label class="field">
-                    <span class="field__label">"Name"</span>
-                    <input
-                        type="text"
-                        class="field__input"
-                        autocomplete="off"
-                        prop:value=move || name.get()
-                        on:input=move |ev| name.set(event_target_value(&ev))
-                    />
-                </label>
-                {move || {
-                    existing()
-                        .map(|n| {
-                            view! {
-                                <p class="field__hint">
-                                    {format!("Already in the list as “{n}”: that one will be used.")}
-                                </p>
-                            }
-                        })
-                }}
-                <Show when=move || existing().is_none()>
-                    <div class="field">
-                        <span class="field__label">"Aisle"</span>
-                        <p class="chips chips--wrap">
-                            {CATEGORY_ORDER
-                                .iter()
-                                .map(|c| {
-                                    let c = c.to_string();
-                                    let (c2, c3) = (c.clone(), c.clone());
-                                    view! {
-                                        <button
-                                            type="button"
-                                            class="chip"
-                                            class:chip--on=move || aisle.with(|a| *a == c2)
-                                            on:click=move |_| aisle.set(c3.clone())
-                                        >
-                                            {c}
-                                        </button>
-                                    }
-                                })
-                                .collect_view()}
-                        </p>
-                    </div>
-                    <div class="field">
-                        <span class="field__label">"Bought and measured"</span>
-                        <p class="chips chips--wrap">
-                            {Measure::ALL
-                                .into_iter()
-                                .map(|m| {
-                                    view! {
-                                        <button
-                                            type="button"
-                                            class="chip"
-                                            class:chip--on=move || measure.get() == m
-                                            on:click=move |_| measure.set(m)
-                                        >
-                                            {m.label()}
-                                        </button>
-                                    }
-                                })
-                                .collect_view()}
-                        </p>
-                        <p class="field__hint">
-                            {move || match measure.get() {
-                                Measure::Weight => "In grams, like flour or cheese.",
-                                Measure::Volume => "In millilitres, like milk or stock.",
-                                Measure::Count => "By the piece, like eggs or lemons.",
-                            }}
-                        </p>
-                    </div>
-                </Show>
-                <div class="form-actions">
-                    <button
-                        type="button"
-                        class="btn btn--primary"
-                        prop:disabled=move || !ready()
-                        on:click=add
-                    >
-                        "Use this ingredient"
-                    </button>
-                </div>
-            </div>
-        </Modal>
-    }
-}
-
 /// "Paste a recipe": text copied from anywhere fills the form, to be checked.
 #[component]
 fn PasteSheet(ed: Editor, open: RwSignal<bool>) -> impl IntoView {
@@ -824,28 +628,23 @@ fn PasteSheet(ed: Editor, open: RwSignal<bool>) -> impl IntoView {
     let fill = move |_| {
         let (mut pasted, summary) = ed
             .catalog
-            .with_untracked(|c| form_from_text(&text.get_untracked(), c));
+            .with_value(|c| form_from_text(&text.get_untracked(), c));
         ed.form.update(|f| {
             // Keep what the paste doesn't say (often the author).
             if pasted.author.is_empty() {
                 pasted.author = f.author.clone();
             }
-            pasted.new_ingredients = f.new_ingredients.clone();
             *f = pasted;
         });
         open.set(false);
         text.set(String::new());
-        let mut message = format!(
+        notify(format!(
             "Filled in {} ingredient{} and {} step{}",
             summary.ingredients,
             if summary.ingredients == 1 { "" } else { "s" },
             summary.steps,
             if summary.steps == 1 { "" } else { "s" },
-        );
-        if summary.to_pick > 0 {
-            message.push_str(&format!(" · {} to pick", summary.to_pick));
-        }
-        notify(message);
+        ));
     };
     view! {
         <Modal open=open title="Paste a recipe">

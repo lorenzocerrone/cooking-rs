@@ -21,10 +21,10 @@
 //! Soften the onion and garlic.
 //! ```
 
-use crate::extras::{parse_number, suggest};
-use crate::filter::{meat_ingredients, VEGETARIAN_TAG};
-use crate::models::{CatalogIngredient, IngredientCatalog, Recipe, RecipeIngredient};
-use crate::quantity::{is_convertible, resolve_unit, Unit};
+use crate::extras::parse_number;
+use crate::filter::{meat_ingredients, unknown_ingredients, VEGETARIAN_TAG};
+use crate::models::{measure, IngredientCatalog, Measure, Recipe, RecipeIngredient};
+use crate::quantity::{is_convertible, Unit};
 
 /// Step text written when a draft has no steps. The data validation suite
 /// rejects it, so a placeholder can't ship.
@@ -190,6 +190,18 @@ pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec
             "no steps: wrote a `{TODO_STEP}` step; `cargo test` fails until it is replaced"
         ));
     }
+    for item in &recipe_meta.ingredients {
+        if let Some(hint) = unit_hint(item, catalog) {
+            warnings.push(hint);
+        }
+    }
+    let unknown = unknown_ingredients(&recipe_meta, catalog);
+    if !unknown.is_empty() {
+        warnings.push(format!(
+            "not in the ingredient dictionary (own grocery line, aisle Other): {}",
+            unknown.join(", ")
+        ));
+    }
     warnings.extend(set_diet_tag(&mut recipe_meta, catalog));
     Ok(Draft {
         recipe: Recipe {
@@ -203,18 +215,20 @@ pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec
     })
 }
 
-/// The Diet filter reads the `vegetarian` tag: add it when no ingredient is
-/// meat or fish, drop it (with a warning) when one is.
+/// The Diet filter reads the `vegetarian` tag. Meat or fish drops it (with a
+/// warning); when every ingredient is known and none is, it is added. With an
+/// ingredient the dictionary doesn't know, the tag is left as the author set it.
 pub fn set_diet_tag(recipe: &mut Recipe, catalog: &IngredientCatalog) -> Option<String> {
     let meat = meat_ingredients(recipe, catalog).join(", ");
     let tagged = recipe.tags.iter().any(|t| t == VEGETARIAN_TAG);
-    if meat.is_empty() && !tagged {
-        recipe.tags.push(VEGETARIAN_TAG.into());
-    } else if !meat.is_empty() && tagged {
+    if !meat.is_empty() && tagged {
         recipe.tags.retain(|t| t != VEGETARIAN_TAG);
         return Some(format!(
             "dropped the `{VEGETARIAN_TAG}` tag: it uses {meat}"
         ));
+    }
+    if meat.is_empty() && !tagged && unknown_ingredients(recipe, catalog).is_empty() {
+        recipe.tags.push(VEGETARIAN_TAG.into());
     }
     None
 }
@@ -260,13 +274,29 @@ fn parse_amount(token: &str) -> Option<f64> {
     }
 }
 
-/// Parse one ingredient line (`"2 tbsp olive oil, warmed (optional)"`) into a
-/// recipe ingredient, or explain why it can't be used.
-///
-/// A leading number is the amount. The next token is the unit only if it is a
-/// [`Unit`] spelling or the matched ingredient's piece label, so `"1 red onion"`
-/// keeps `red onion` as the name. A bare number counts pieces (`"2 onion"` is two
-/// onions, not 2 g), and every unit must convert into the shopping unit.
+/// Words that count pieces of something ("2 bunches coriander"), taken as
+/// the unit when an unknown ingredient follows.
+pub const PIECE_WORDS: &[&str] = &[
+    "bunch", "can", "clove", "cube", "fillet", "handful", "head", "jar", "knob", "leaf", "pack",
+    "packet", "pinch", "sheet", "slice", "sprig", "stalk", "stick", "tin",
+];
+
+fn is_piece_word(word: &str) -> bool {
+    let w = word.to_lowercase();
+    let singular = w
+        .strip_suffix("es")
+        .filter(|s| PIECE_WORDS.contains(s))
+        .or_else(|| w.strip_suffix('s'))
+        .unwrap_or(&w);
+    PIECE_WORDS.contains(&singular) || PIECE_WORDS.contains(&w.as_str())
+}
+
+/// Parse one ingredient line (`"2 tbsp olive oil, warmed (optional)"`). Any
+/// name is accepted; the dictionary only helps split it. A leading number is
+/// the amount; the next word is the unit when it is a [`Unit`], the piece
+/// label of the ingredient that follows ("3 cloves garlic"), or a common piece
+/// word before a name ("2 bunches coriander"). A bare number counts pieces.
+/// Units are written out, so the recipe reads the same without the dictionary.
 pub fn parse_line(line: &str, catalog: &IngredientCatalog) -> Result<RecipeIngredient, String> {
     let mut body = line.trim();
     let mut optional = false;
@@ -282,76 +312,67 @@ pub fn parse_line(line: &str, catalog: &IngredientCatalog) -> Result<RecipeIngre
         None => (body, None),
     };
     let tokens: Vec<&str> = body.split_whitespace().collect();
-    let Some(first) = tokens.first() else {
+    if tokens.is_empty() {
         return Err(format!("`{line}`: no ingredient name"));
-    };
-
-    let amount = parse_amount(first);
+    }
+    let amount = parse_amount(tokens[0]);
     let (unit, name): (Option<&str>, Vec<&str>) = match amount {
         None => (None, tokens.clone()),
-        Some(_) => {
-            let rest = &tokens[1..];
-            match rest {
-                [] => return Err(format!("`{line}`: an amount but no ingredient")),
-                [unit, name @ ..] if !name.is_empty() && Unit::parse(unit).is_some() => {
-                    (Some(*unit), name.to_vec())
-                }
-                [label, name @ ..]
-                    if !name.is_empty()
-                        && find_ingredient(catalog, &name.join(" ")).is_some_and(
-                            |(_, info)| info.count.as_ref().is_some_and(|c| c.matches_label(label)),
-                        ) =>
-                {
-                    (Some(*label), name.to_vec())
-                }
-                _ => (None, rest.to_vec()),
+        Some(_) => match &tokens[1..] {
+            [] => return Err(format!("`{line}`: an amount but no ingredient")),
+            [unit, name @ ..] if !name.is_empty() && Unit::parse(unit).is_some() => {
+                (Some(*unit), name.to_vec())
             }
-        }
+            [label, name @ ..]
+                if !name.is_empty() && {
+                    let known = catalog.lookup(&name.join(" "));
+                    known.is_some_and(|(_, i)| {
+                        i.count.as_ref().is_some_and(|c| c.matches_label(label))
+                    }) || (catalog.lookup(&tokens[1..].join(" ")).is_none() && is_piece_word(label))
+                } =>
+            {
+                (Some(*label), name.to_vec())
+            }
+            rest => (None, rest.to_vec()),
+        },
     };
     let name = name.join(" ");
-    let Some((key, info)) = find_ingredient(catalog, &name) else {
-        return Err(unknown_ingredient(
-            catalog,
-            &name,
-            amount.is_some() && unit.is_none(),
-        ));
-    };
-
-    // A bare number counts pieces. For an ingredient shopped in pieces that is
-    // its shopping unit, so the unit stays implicit (`"egg", 4`), as does an
-    // explicit shopping unit ("300 g lentils" → `"lentils", 300`).
-    let unit = match (amount, unit) {
-        (Some(_), None) if info.unit != Unit::Piece => Some("pcs"),
-        (_, Some(u)) if Unit::parse(u) == Some(info.unit) => None,
-        _ => unit,
-    };
-    if amount.is_some() {
-        let resolved = resolve_unit(unit, info.unit, info.count.as_ref())
-            .map_err(|e| format!("`{line}`: unknown unit `{}`", e.0))?;
-        if !is_convertible(resolved, info.unit, info.count.as_ref()) {
-            return Err(if unit == Some("pcs") && info.unit != Unit::Piece {
-                format!(
-                    "`{line}`: a bare number counts pieces, but {} has no piece size; add a unit (g, ml, tbsp…) or `count.per_piece` to its catalog entry",
-                    info.name
-                )
-            } else {
-                format!(
-                    "`{line}`: `{}` does not convert into {}'s shopping unit `{}`",
-                    resolved.as_str(),
-                    info.name,
-                    info.unit.as_str()
-                )
-            });
-        }
-    }
-
     Ok(RecipeIngredient {
-        ingredient: key.to_string(),
+        name: capitalize(&name),
         amount,
-        unit: unit.map(str::to_string),
+        unit: amount.and(unit).map(str::to_string),
         note: note.map(str::to_string),
         optional,
+        aisle: None,
     })
+}
+
+/// A heads-up about a line's unit, for a known ingredient: one the grocery
+/// list can't add up with the rest ("1 cup flour", shopped by weight), or a
+/// piece word it doesn't know for it. Never blocking: the line still works.
+pub fn unit_hint(item: &RecipeIngredient, catalog: &IngredientCatalog) -> Option<String> {
+    item.amount?;
+    let (_, info) = catalog.lookup(&item.name)?;
+    match measure(item, Some(info)) {
+        Measure::Unit(u) if !is_convertible(u, info.unit, info.count.as_ref()) => Some(match u {
+            Unit::Piece => format!(
+                "{} is bought by {}; a count can't be added to the rest of the list",
+                info.name,
+                info.unit.as_str()
+            ),
+            _ => format!(
+                "{} is bought by {}; {} can't be added to the rest of the list",
+                info.name,
+                info.unit.as_str(),
+                u.as_str()
+            ),
+        }),
+        Measure::Label(word) => Some(format!(
+            "“{word}” isn't a unit the list knows for {}; it is shown separately",
+            info.name
+        )),
+        _ => None,
+    }
 }
 
 /// The comma that starts the note: the first one not inside a decimal number
@@ -369,75 +390,6 @@ fn note_comma(s: &str) -> Option<usize> {
 fn strip_suffix_ci<'a>(s: &'a str, suffix: &str) -> Option<&'a str> {
     let split = s.len().checked_sub(suffix.len())?;
     (s.is_char_boundary(split) && s[split..].eq_ignore_ascii_case(suffix)).then(|| &s[..split])
-}
-
-/// Find a catalog ingredient by key or display name, case-insensitive, also
-/// trying singular and plural forms (`"tomatoes"` → `tomato`, `"olive"` →
-/// `olives`). Never guesses beyond that.
-pub fn find_ingredient<'a>(
-    catalog: &'a IngredientCatalog,
-    name: &str,
-) -> Option<(&'a str, &'a CatalogIngredient)> {
-    let name = name.trim().to_lowercase();
-    if name.is_empty() {
-        return None;
-    }
-    let mut candidates = vec![name.clone()];
-    if let Some(s) = name.strip_suffix("es") {
-        candidates.push(s.to_string());
-    }
-    if let Some(s) = name.strip_suffix('s') {
-        candidates.push(s.to_string());
-    }
-    candidates.push(format!("{name}s"));
-    candidates.iter().find_map(|c| {
-        let key = slug(c);
-        catalog
-            .0
-            .get_key_value(&key)
-            .or_else(|| catalog.0.iter().find(|(_, i)| i.name.to_lowercase() == *c))
-            .map(|(k, i)| (k.as_str(), i))
-    })
-}
-
-fn unknown_ingredient(catalog: &IngredientCatalog, name: &str, counted: bool) -> String {
-    let mut message = format!("unknown ingredient `{name}`");
-    let hints: Vec<String> = suggest(catalog, name, 3)
-        .into_iter()
-        .map(|s| format!("{} (`{}`)", s.name, s.key))
-        .collect();
-    if !hints.is_empty() {
-        message.push_str(&format!("; did you mean {}?", hints.join(", ")));
-    }
-    message.push_str("\n    add it to ingredients.json:\n    ");
-    message.push_str(&catalog_stub(name, counted, None));
-    // "2 sprigs rosemary": the first word may be a piece label of a new ingredient.
-    if let Some((label, rest)) = name.split_once(' ').filter(|_| counted) {
-        let label = label.strip_suffix('s').unwrap_or(label);
-        message.push_str(&format!("\n    or, if `{label}` is a piece label:\n    "));
-        message.push_str(&catalog_stub(rest, true, Some(label)));
-    }
-    message
-}
-
-/// A catalog entry to paste into `ingredients.json` for an unknown ingredient.
-/// The category is a placeholder that validation rejects until it is chosen;
-/// `counted` adds a piece size to fill in, `label` names one piece.
-pub fn catalog_stub(name: &str, counted: bool, label: Option<&str>) -> String {
-    let display = capitalize(name.trim());
-    let count = match (counted, label) {
-        (false, _) => String::new(),
-        (true, None) => r#", "count": { "per_piece": 100 }"#.into(),
-        (true, Some(l)) => format!(
-            r#", "count": {{ "label": {}, "per_piece": 100 }}"#,
-            json_str(l)
-        ),
-    };
-    format!(
-        r#""{}": {{ "name": {}, "unit": "g", "category": "?"{count} }},"#,
-        slug(name),
-        json_str(&display)
-    )
 }
 
 pub fn capitalize(s: &str) -> String {
@@ -511,7 +463,7 @@ pub fn render_json(r: &Recipe) -> String {
 }
 
 fn ingredient_json(i: &RecipeIngredient) -> String {
-    let mut parts = vec![format!(r#""ingredient": {}"#, json_str(&i.ingredient))];
+    let mut parts = vec![format!(r#""name": {}"#, json_str(&i.name))];
     if let Some(a) = i.amount {
         // `Display` prints 300.0 as "300" and 0.5 as "0.5".
         parts.push(format!(r#""amount": {a}"#));
@@ -524,6 +476,9 @@ fn ingredient_json(i: &RecipeIngredient) -> String {
     }
     if i.optional {
         parts.push(r#""optional": true"#.into());
+    }
+    if let Some(a) = &i.aisle {
+        parts.push(format!(r#""aisle": {}"#, json_str(a)));
     }
     format!("{{ {} }}", parts.join(", "))
 }
@@ -596,10 +551,10 @@ mod tests {
         .unwrap()
     }
 
-    fn item(key: &str, amount: Option<f64>, unit: Option<&str>) -> RecipeIngredient {
+    fn item(name: &str, amount: Option<f64>, unit: Option<&str>) -> RecipeIngredient {
         RecipeIngredient {
             unit: unit.map(Into::into),
-            ..RecipeIngredient::new(key.into(), amount)
+            ..RecipeIngredient::new(name, amount)
         }
     }
 
@@ -609,50 +564,64 @@ mod tests {
 
     #[test]
     fn spec_examples_parse() {
-        // A bare number counts pieces.
-        assert_eq!(ok("2 onion"), item("onion", Some(2.0), Some("pcs")));
-        // Plural name, explicit unit.
-        assert_eq!(ok("400 g tomatoes"), item("tomato", Some(400.0), None));
-        assert_eq!(ok("0.4 kg tomatoes"), item("tomato", Some(0.4), Some("kg")));
+        // A bare number counts pieces; no unit is written.
+        assert_eq!(ok("2 onion"), item("Onion", Some(2.0), None));
+        // Units are written out; the name is kept as written.
+        assert_eq!(
+            ok("400 g tomatoes"),
+            item("Tomatoes", Some(400.0), Some("g"))
+        );
+        assert_eq!(
+            ok("0.4 kg tomatoes"),
+            item("Tomatoes", Some(0.4), Some("kg"))
+        );
         // No amount: to taste.
-        assert_eq!(ok("salt"), item("salt", None, None));
+        assert_eq!(ok("salt"), item("Salt", None, None));
     }
 
     #[test]
     fn piece_labels_units_and_names() {
         assert_eq!(
             ok("3 cloves garlic"),
-            item("garlic", Some(3.0), Some("cloves"))
+            item("Garlic", Some(3.0), Some("cloves"))
         );
         assert_eq!(
             ok("1 can coconut milk"),
-            item("coconut_milk", Some(1.0), Some("can"))
+            item("Coconut milk", Some(1.0), Some("can"))
         );
         assert_eq!(
             ok("2 tbsp olive oil"),
-            item("olive_oil", Some(2.0), Some("tbsp"))
+            item("Olive oil", Some(2.0), Some("tbsp"))
         );
         // "red" is neither a unit nor a label: it stays in the name.
-        assert_eq!(ok("1 red onion"), item("red_onion", Some(1.0), Some("pcs")));
-        // Shopped in pieces: the unit stays implicit.
-        assert_eq!(ok("4 eggs"), item("egg", Some(4.0), None));
-        // Display name and the plural key both match.
+        assert_eq!(ok("1 red onion"), item("Red onion", Some(1.0), None));
+        assert_eq!(ok("4 eggs"), item("Eggs", Some(4.0), None));
         assert_eq!(
             ok("100 g kalamata olives"),
-            item("olives", Some(100.0), None)
+            item("Kalamata olives", Some(100.0), Some("g"))
         );
-        assert_eq!(ok("50 grams olive"), item("olives", Some(50.0), None));
+        // Ingredients the dictionary doesn't know are fine; a common piece
+        // word before one is its unit.
+        assert_eq!(ok("2 star anise"), item("Star anise", Some(2.0), None));
+        assert_eq!(
+            ok("2 bunches coriander"),
+            item("Coriander", Some(2.0), Some("bunches"))
+        );
+        assert_eq!(
+            ok("2 sprigs rosemary"),
+            item("Rosemary", Some(2.0), Some("sprigs"))
+        );
     }
 
     #[test]
     fn fractions_notes_and_optional() {
         assert_eq!(
             ok("1/2 can coconut milk"),
-            item("coconut_milk", Some(0.5), Some("can"))
+            item("Coconut milk", Some(0.5), Some("can"))
         );
         assert_eq!(
             ok("0,5 l olive oil"),
-            item("olive_oil", Some(0.5), Some("l"))
+            item("Olive oil", Some(0.5), Some("l"))
         );
         let onion = ok("1 onion, finely chopped (Optional)");
         assert_eq!(onion.note.as_deref(), Some("finely chopped"));
@@ -663,30 +632,21 @@ mod tests {
     }
 
     #[test]
-    fn bad_lines_are_explained() {
+    fn lines_are_kept_and_odd_units_get_a_hint() {
         let c = catalog();
-        let err = parse_line("300 lentils", &c).unwrap_err();
-        assert!(err.contains("bare number counts pieces"), "{err}");
-        let err = parse_line("1 cup salt", &c).unwrap_err();
-        assert!(err.contains("does not convert"), "{err}");
         let err = parse_line("2", &c).unwrap_err();
         assert!(err.contains("no ingredient"), "{err}");
 
-        let err = parse_line("2 zucchini", &c).unwrap_err();
-        assert!(err.starts_with("unknown ingredient `zucchini`"), "{err}");
-        assert!(err.contains(r#""zucchini": { "name": "Zucchini", "unit": "g", "category": "?", "count": { "per_piece": 100 } },"#), "{err}");
-        let err = parse_line("2 sprigs rosemary", &c).unwrap_err();
-        assert!(
-            err.contains(r#""rosemary": { "name": "Rosemary", "unit": "g", "category": "?", "count": { "label": "sprig", "per_piece": 100 } },"#),
-            "{err}"
-        );
-        let err = parse_line("200 g red lentil", &c).unwrap_err();
-        assert!(err.contains("unknown ingredient `red lentil`"), "{err}");
-        let err = parse_line("2 tbsp oil", &c).unwrap_err();
-        assert!(
-            err.contains("did you mean Olive oil (`olive_oil`)"),
-            "{err}"
-        );
+        let hint = |line: &str| unit_hint(&ok(line), &c);
+        let h = hint("300 lentils").unwrap();
+        assert!(h.contains("a count can't be added"), "{h}");
+        let h = hint("1 cup salt").unwrap();
+        assert!(h.contains("cup can't be added"), "{h}");
+        let h = hint("1 bunch garlic").unwrap();
+        assert!(h.contains("“bunch”"), "{h}");
+        assert_eq!(hint("300 g lentils"), None);
+        assert_eq!(hint("3 cloves garlic"), None);
+        assert_eq!(hint("2 star anise"), None, "unknown: nothing to compare");
     }
 
     const DRAFT: &str = "Lentil Dal\nauthor: Claude\nservings: 4\ncuisine: Indian\ntags: Dinner, vegetarian\nprep: 10 min\ncook: 30\n\n300 g lentils\n1 onion, finely chopped\nsalt\n\nSteps\n1. Soften the onion.\n2) Simmer the lentils.\n";
@@ -720,10 +680,22 @@ mod tests {
         .unwrap();
         assert_eq!(meat.recipe.tags, vec!["dinner"]);
         assert!(
-            meat.warnings[0].contains("chicken_breast"),
+            meat.warnings[0].contains("Chicken breast"),
             "{:?}",
             meat.warnings
         );
+        // An ingredient the dictionary doesn't know: the tag is the author's call.
+        let unknown = |tags: &str| {
+            parse_draft(
+                &format!("Soup\nauthor: Me\ntags: {tags}\n2 star anise\n\nSteps\nCook.\n"),
+                &catalog(),
+            )
+            .unwrap()
+            .recipe
+            .tags
+        };
+        assert_eq!(unknown("soup"), vec!["soup"]);
+        assert_eq!(unknown("soup, vegetarian"), vec!["soup", "vegetarian"]);
     }
 
     #[test]
@@ -743,7 +715,14 @@ mod tests {
         )
         .unwrap_err();
         let lines: Vec<usize> = problems.iter().map(|p| p.line).collect();
-        assert_eq!(lines, vec![2, 3, 6, 8]);
+        // The unknown zucchini and the cup of salt are warnings, not problems.
+        assert_eq!(lines, vec![2, 3]);
+        let draft = parse_draft(
+            "Soup\nauthor: Me\n\n2 zucchini\n1 cup salt\n\nSteps\nCook.\n",
+            &catalog(),
+        )
+        .unwrap();
+        assert_eq!(draft.warnings.len(), 2, "{:?}", draft.warnings);
         let problems = parse_draft("Soup\nsalt\n", &catalog()).unwrap_err();
         assert!(problems[0].message.contains("author"), "{problems:?}");
         assert!(parse_draft("", &catalog()).is_err());
@@ -756,7 +735,7 @@ mod tests {
         let json = render_json(&recipe);
         assert_eq!(serde_json::from_str::<Recipe>(&json).unwrap(), recipe);
         assert!(json.contains(
-            "\n    { \"ingredient\": \"onion\", \"amount\": 1, \"unit\": \"pcs\", \"note\": \"finely chopped\" },\n"
+            "\n    { \"name\": \"Onion\", \"amount\": 1, \"note\": \"finely chopped\" },\n"
         ));
         assert!(json.contains("\"tags\": [\"dinner\", \"vegetarian\"],"));
         assert!(!json.contains("null"));

@@ -305,10 +305,8 @@ mod tests {
     fn sample() -> PersistedState {
         let mut plan = MealPlan::default();
         plan.add_meal(today().add_days(1), "dal".into());
-        plan.extras.push(Extra::Catalog(RecipeIngredient::new(
-            "milk".into(),
-            Some(1000.0),
-        )));
+        plan.extras
+            .push(Extra::Catalog(RecipeIngredient::new("milk", Some(1000.0))));
         let mut grocery = GroceryState::default();
         grocery.toggle_checked(&line("onion", &[(Dimension::Mass, 250.0)]));
         grocery.toggle_omitted("salt");

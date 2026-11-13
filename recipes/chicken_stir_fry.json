@@ -10,13 +10,13 @@
   "prep_time": 15,
   "cook_time": 12,
   "ingredients": [
-    { "ingredient": "chicken_breast", "amount": 400 },
-    { "ingredient": "broccoli", "amount": 250 },
-    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "minced" },
-    { "ingredient": "soy_sauce", "amount": 45 },
-    { "ingredient": "sesame_oil", "amount": 15 },
-    { "ingredient": "rice", "amount": 240 }
+    { "name": "Chicken breast", "amount": 400, "unit": "g" },
+    { "name": "Broccoli", "amount": 250, "unit": "g" },
+    { "name": "Bell pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "name": "Garlic", "amount": 2, "unit": "cloves", "note": "minced" },
+    { "name": "Soy sauce", "amount": 45, "unit": "ml" },
+    { "name": "Sesame oil", "amount": 15, "unit": "ml" },
+    { "name": "Rice", "amount": 240, "unit": "g" }
   ],
   "steps": [
     "Cook the rice.",

@@ -1242,16 +1242,8 @@ select.field__input:disabled {
 }
 
 .ing-row__name {
-  font-weight: 600;
-  font-size: 16px;
-  padding: 8px 0 0;
-  text-decoration: underline dotted var(--faint);
-  text-underline-offset: 4px;
-}
-
-.ing-row__name small {
-  font-weight: 400;
-  font-size: 12px;
+  display: grid;
+  gap: 4px;
 }
 
 .ing-row__qty {

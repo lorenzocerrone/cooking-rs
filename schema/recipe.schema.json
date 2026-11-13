@@ -23,16 +23,17 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["ingredient"],
+        "required": ["name"],
         "properties": {
-          "ingredient": { "type": "string", "description": "Key into ingredients.json." },
+          "name": { "type": "string", "minLength": 1, "description": "The ingredient as written. Matched against ingredients.json (key, name or alias) for the aisle, conversions and grocery merging; any name works." },
           "amount": { "type": "number", "exclusiveMinimum": 0, "description": "Omit for \"to taste\"." },
           "unit": {
             "type": "string",
-            "description": "g, kg, ml, l, tsp, tbsp, cup, pcs — or the ingredient's piece label from the catalog (clove, can…). Omit to use the catalog's shopping unit."
+            "description": "g, kg, ml, l, tsp, tbsp, cup, pcs, a piece label from the dictionary (clove, can…) or any piece word (bunch). Omit for a plain count (\"2\" eggs)."
           },
           "note": { "type": "string", "description": "Preparation note, e.g. \"finely chopped\"." },
-          "optional": { "type": "boolean", "default": false }
+          "optional": { "type": "boolean", "default": false },
+          "aisle": { "type": "string", "description": "Grocery aisle for an ingredient the dictionary doesn't know (ignored otherwise); missing means Other." }
         }
       }
     },

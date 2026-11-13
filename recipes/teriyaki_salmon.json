@@ -10,15 +10,15 @@
   "prep_time": 5,
   "cook_time": 20,
   "ingredients": [
-    { "ingredient": "salmon", "amount": 2, "unit": "fillets" },
-    { "ingredient": "soy_sauce", "amount": 3, "unit": "tbsp" },
-    { "ingredient": "honey", "amount": 20 },
-    { "ingredient": "ginger", "amount": 1, "unit": "thumb", "note": "grated" },
-    { "ingredient": "garlic", "amount": 1, "unit": "clove", "note": "crushed" },
-    { "ingredient": "rice", "amount": 150 },
-    { "ingredient": "broccoli", "amount": 200, "note": "in florets" },
-    { "ingredient": "sesame_oil", "amount": 1, "unit": "tsp" },
-    { "ingredient": "scallion", "amount": 2, "unit": "pcs", "note": "sliced", "optional": true }
+    { "name": "Salmon fillet", "amount": 2, "unit": "fillets" },
+    { "name": "Soy sauce", "amount": 3, "unit": "tbsp" },
+    { "name": "Honey", "amount": 20, "unit": "g" },
+    { "name": "Ginger", "amount": 1, "unit": "thumb", "note": "grated" },
+    { "name": "Garlic", "amount": 1, "unit": "clove", "note": "crushed" },
+    { "name": "Rice", "amount": 150, "unit": "g" },
+    { "name": "Broccoli", "amount": 200, "unit": "g", "note": "in florets" },
+    { "name": "Sesame oil", "amount": 1, "unit": "tsp" },
+    { "name": "Scallion", "amount": 2, "unit": "pcs", "note": "sliced", "optional": true }
   ],
   "steps": [
     "Start the rice. Stir together the soy sauce, honey, ginger, garlic and 2 tbsp water.",

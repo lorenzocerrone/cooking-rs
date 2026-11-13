@@ -120,9 +120,7 @@ pub fn RecipeBody(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
                         .map(|item| {
                             let (name, amount) = catalog.with_value(|c| {
                                 (
-                                    c.get(&item.ingredient)
-                                        .map(|i| i.name.clone())
-                                        .unwrap_or_else(|| item.ingredient.clone()),
+                                    item.name.clone(),
                                     format_ingredient_amount_scaled(item, c, f),
                                 )
                             });

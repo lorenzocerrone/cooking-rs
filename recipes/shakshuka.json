@@ -10,17 +10,17 @@
   "prep_time": 10,
   "cook_time": 20,
   "ingredients": [
-    { "ingredient": "egg", "amount": 4 },
-    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
-    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
-    { "ingredient": "cumin", "amount": 3 },
-    { "ingredient": "paprika", "amount": 3 },
-    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "feta", "amount": 50, "note": "crumbled", "optional": true },
-    { "ingredient": "salt" },
-    { "ingredient": "black_pepper" }
+    { "name": "Egg", "amount": 4 },
+    { "name": "Chopped tomatoes", "amount": 1, "unit": "can" },
+    { "name": "Bell pepper", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "name": "Onion", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "name": "Garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "name": "Ground cumin", "amount": 3, "unit": "g" },
+    { "name": "Smoked paprika", "amount": 3, "unit": "g" },
+    { "name": "Olive oil", "amount": 2, "unit": "tbsp" },
+    { "name": "Feta", "amount": 50, "unit": "g", "note": "crumbled", "optional": true },
+    { "name": "Salt" },
+    { "name": "Black pepper" }
   ],
   "steps": [
     "Soften the onion and pepper in the olive oil for 8 minutes.",

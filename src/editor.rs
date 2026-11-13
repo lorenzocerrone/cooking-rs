@@ -1,17 +1,21 @@
 //! The recipe form behind the editor page: plain data a person fills in field by
-//! field, turned into a checked [`Recipe`] (or a list of what is still missing)
-//! against the ingredient catalog. New ingredients made in the form travel with
-//! it. Pure: no Leptos types, no browser access.
+//! field, turned into a [`Recipe`] (or a list of what is still missing). Any
+//! ingredient name is accepted; the dictionary only suggests names and units
+//! and flags amounts the grocery list can't add up. Pure: no Leptos types, no
+//! browser access.
 
 use serde::{Deserialize, Serialize};
 
 use crate::extras::parse_number;
 use crate::models::{CatalogIngredient, IngredientCatalog, Recipe, RecipeIngredient};
-use crate::quantity::{is_convertible, resolve_unit, CountSpec, Unit};
-use crate::scaffold::{set_diet_tag, slug};
+use crate::quantity::{is_convertible, Unit};
+use crate::scaffold::{capitalize, set_diet_tag, slug, unit_hint};
 
 /// Servings a new form starts with.
 pub const DEFAULT_SERVINGS: u32 = 2;
+
+/// Units offered for any ingredient (the dictionary adds piece labels).
+pub const COMMON_UNITS: [&str; 7] = ["g", "kg", "ml", "l", "tsp", "tbsp", "cup"];
 
 /// Everything the editor's fields hold. Text fields keep what was typed, so a
 /// half-typed amount is never lost; [`RecipeForm::to_recipe`] reads them.
@@ -29,8 +33,11 @@ pub struct RecipeForm {
     pub tags: Vec<String>,
     pub ingredients: Vec<IngredientRow>,
     pub steps: Vec<String>,
-    /// Ingredients made in this form, not yet in the catalog.
-    pub new_ingredients: Vec<NewIngredient>,
+    /// Kept from an edited recipe, so the edit replaces it even if the name
+    /// changes; a new recipe's id comes from its name.
+    pub id: Option<String>,
+    /// Kept from an edited recipe.
+    pub image: Option<String>,
 }
 
 impl Default for RecipeForm {
@@ -46,103 +53,46 @@ impl Default for RecipeForm {
             tags: Vec::new(),
             ingredients: vec![IngredientRow::default()],
             steps: vec![String::new()],
-            new_ingredients: Vec::new(),
+            id: None,
+            image: None,
         }
     }
 }
 
-/// One ingredient line of the form.
+/// One ingredient line of the form, as typed.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct IngredientRow {
-    /// What was typed in the search box (kept for the "pick one" hint).
     pub name: String,
-    /// The catalog key once an ingredient is picked.
-    pub key: Option<String>,
-    /// As typed; empty means "to taste".
+    /// Empty means "to taste".
     pub amount: String,
-    /// A [`UnitChoice::value`] for the picked ingredient.
+    /// Empty means a plain count ("2" eggs).
     pub unit: String,
     pub note: String,
     pub optional: bool,
+    /// Kept from an edited recipe; the form doesn't show it.
+    pub aisle: Option<String>,
 }
 
-/// How a new ingredient is measured and bought.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Measure {
-    #[default]
-    Weight,
-    Volume,
-    Count,
-}
-
-impl Measure {
-    pub const ALL: [Measure; 3] = [Measure::Weight, Measure::Volume, Measure::Count];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Measure::Weight => "By weight",
-            Measure::Volume => "By volume",
-            Measure::Count => "By the piece",
-        }
-    }
-
-    pub fn unit(self) -> Unit {
-        match self {
-            Measure::Weight => Unit::G,
-            Measure::Volume => Unit::Ml,
-            Measure::Count => Unit::Piece,
-        }
+impl IngredientRow {
+    fn is_blank(&self) -> bool {
+        self.name.trim().is_empty() && self.amount.trim().is_empty()
     }
 }
 
-/// An ingredient added from the form: a catalog entry in the making.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct NewIngredient {
-    pub key: String,
-    pub name: String,
-    pub category: String,
-    pub measure: Measure,
-}
-
-impl NewIngredient {
-    pub fn new(name: &str, category: &str, measure: Measure) -> Self {
-        NewIngredient {
-            key: slug(name),
-            name: crate::scaffold::capitalize(name.trim()),
-            category: category.to_string(),
-            measure,
-        }
-    }
-
-    pub fn entry(&self) -> CatalogIngredient {
-        CatalogIngredient {
-            name: self.name.clone(),
-            unit: self.measure.unit(),
-            category: self.category.clone(),
-            count: None,
-        }
-    }
-
-    /// The line to add to `ingredients.json`.
-    pub fn catalog_line(&self) -> String {
-        let entry = serde_json::to_string(&self.entry()).expect("entries always serialize");
-        format!("\"{}\": {entry},", self.key)
+/// Units to suggest for an ingredient: the ones that add up on the grocery
+/// list when the dictionary knows it (its piece label included, "clove"),
+/// otherwise the common ones.
+pub fn unit_suggestions(name: &str, catalog: &IngredientCatalog) -> Vec<String> {
+    match catalog.lookup(name) {
+        Some((_, info)) => unit_choices(info),
+        None => COMMON_UNITS.iter().map(|u| u.to_string()).collect(),
     }
 }
 
-/// A unit offered for an ingredient: `value` is stored in the row and the
-/// recipe, `label` is what the picker shows.
-#[derive(Clone, Debug, PartialEq)]
-pub struct UnitChoice {
-    pub value: String,
-    pub label: String,
-}
-
-/// The units a recipe may use for this ingredient: every one that converts
-/// into its shopping unit, so the grocery list can always add them up. Pieces
-/// use the ingredient's own label ("cloves") when it has one.
-pub fn unit_choices(info: &CatalogIngredient) -> Vec<UnitChoice> {
+/// The units that convert into this ingredient's shopping unit; pieces as its
+/// label ("clove") when it has one.
+pub fn unit_choices(info: &CatalogIngredient) -> Vec<String> {
     let count = info.count.as_ref();
     [
         Unit::G,
@@ -156,60 +106,12 @@ pub fn unit_choices(info: &CatalogIngredient) -> Vec<UnitChoice> {
     ]
     .into_iter()
     .filter(|u| is_convertible(*u, info.unit, count))
-    .map(|u| match (u, count.and_then(|c| c.label.clone())) {
-        (Unit::Piece, Some(label)) => UnitChoice {
-            label: count
-                .and_then(CountSpec::plural_label)
-                .unwrap_or(label.clone()),
-            value: label,
-        },
-        (Unit::Piece, None) => UnitChoice {
-            value: Unit::Piece.as_str().into(),
-            label: "pieces".into(),
-        },
-        (u, _) => UnitChoice {
-            value: u.as_str().into(),
-            label: u.as_str().into(),
-        },
+    .filter_map(|u| match u {
+        // A plain count needs no unit; a label reads better ("3 cloves").
+        Unit::Piece => count.and_then(|c| c.label.clone()),
+        u => Some(u.as_str().to_string()),
     })
     .collect()
-}
-
-/// The unit a freshly picked ingredient starts with: pieces when it can be
-/// counted, otherwise its shopping unit.
-pub fn default_unit(info: &CatalogIngredient) -> String {
-    let choices = unit_choices(info);
-    let pieces = choices
-        .iter()
-        .find(|c| resolve_unit(Some(&c.value), info.unit, info.count.as_ref()) == Ok(Unit::Piece));
-    match (&info.count, pieces) {
-        (Some(_), Some(p)) => p.value.clone(),
-        _ => choices
-            .into_iter()
-            .find(|c| Unit::parse(&c.value) == Some(info.unit))
-            .map(|c| c.value)
-            .unwrap_or_default(),
-    }
-}
-
-/// The unit a row keeps when its ingredient is picked: the matching choice
-/// for what was typed or pasted ("tablespoons" → `tbsp`, "cloves" → `clove`),
-/// the ingredient's usual unit when nothing was, and the typed text otherwise
-/// (so the form asks for a unit instead of silently changing the amount).
-pub fn fit_unit(typed: &str, info: &CatalogIngredient) -> String {
-    let typed = typed.trim();
-    if typed.is_empty() {
-        return default_unit(info);
-    }
-    let count = info.count.as_ref();
-    let Ok(wanted) = resolve_unit(Some(typed), info.unit, count) else {
-        return typed.to_string();
-    };
-    unit_choices(info)
-        .into_iter()
-        .find(|c| resolve_unit(Some(&c.value), info.unit, count) == Ok(wanted))
-        .map(|c| c.value)
-        .unwrap_or_else(|| typed.to_string())
 }
 
 /// Which part of the form something is wrong with.
@@ -232,30 +134,9 @@ pub struct Issue {
 }
 
 impl RecipeForm {
-    /// The catalog plus the ingredients made in this form.
-    pub fn catalog_with(&self, base: &IngredientCatalog) -> IngredientCatalog {
-        let mut catalog = base.clone();
-        for n in &self.new_ingredients {
-            catalog.0.entry(n.key.clone()).or_insert_with(|| n.entry());
-        }
-        catalog
-    }
-
-    /// Only the new ingredients some row still uses (a removed row leaves none behind).
-    pub fn used_new_ingredients(&self) -> Vec<&NewIngredient> {
-        self.new_ingredients
-            .iter()
-            .filter(|n| {
-                self.ingredients
-                    .iter()
-                    .any(|r| r.key.as_deref() == Some(n.key.as_str()))
-            })
-            .collect()
-    }
-
     /// The id the recipe will get.
     pub fn id(&self) -> String {
-        slug(&self.title)
+        self.id.clone().unwrap_or_else(|| slug(&self.title))
     }
 
     /// True when nothing has been filled in yet.
@@ -268,53 +149,42 @@ impl RecipeForm {
     }
 
     /// The recipe, or everything still to fix. Blank ingredient rows and steps
-    /// are ignored. `catalog` is the base catalog; new ingredients are added.
-    pub fn to_recipe(&self, base: &IngredientCatalog) -> Result<Recipe, Vec<Issue>> {
-        let catalog = self.catalog_with(base);
+    /// are ignored.
+    pub fn to_recipe(&self, catalog: &IngredientCatalog) -> Result<Recipe, Vec<Issue>> {
         let mut issues = Vec::new();
-        let mut issue = |field, message: &str| {
-            issues.push(Issue {
-                field,
-                message: message.to_string(),
-            })
-        };
+        let mut issue = |field, message: String| issues.push(Issue { field, message });
 
         let title = self.title.trim();
         let id = self.id();
         if title.is_empty() {
-            issue(Field::Title, "Give the recipe a name.");
+            issue(Field::Title, "Give the recipe a name.".into());
         } else if id.is_empty() {
-            issue(Field::Title, "The name needs a letter or a number.");
+            issue(Field::Title, "The name needs a letter or a number.".into());
         }
         if self.author.trim().is_empty() {
-            issue(Field::Author, "Say who the recipe is by.");
+            issue(Field::Author, "Say who the recipe is by.".into());
         }
         let prep = minutes(&self.prep);
         if prep.is_err() {
-            issue(Field::Prep, "Prep time should be minutes, like 15.");
+            issue(Field::Prep, "Prep time should be minutes, like 15.".into());
         }
         let cook = minutes(&self.cook);
         if cook.is_err() {
-            issue(Field::Cook, "Cook time should be minutes, like 30.");
+            issue(Field::Cook, "Cook time should be minutes, like 30.".into());
         }
 
         let mut ingredients = Vec::new();
         for (i, row) in self.ingredients.iter().enumerate() {
-            if row.key.is_none() && row.name.trim().is_empty() {
+            if row.is_blank() {
                 continue;
             }
-            match row_to_ingredient(row, &catalog) {
+            match row_to_ingredient(row) {
                 Ok(item) => ingredients.push(item),
-                Err(message) => issue(Field::Ingredient(i), &message),
+                Err(message) => issue(Field::Ingredient(i), message),
             }
         }
-        if ingredients.is_empty()
-            && !self
-                .ingredients
-                .iter()
-                .any(|r| r.key.is_some() || !r.name.trim().is_empty())
-        {
-            issue(Field::Ingredients, "Add at least one ingredient.");
+        if self.ingredients.iter().all(IngredientRow::is_blank) {
+            issue(Field::Ingredients, "Add at least one ingredient.".into());
         }
         let steps: Vec<String> = self
             .steps
@@ -323,15 +193,26 @@ impl RecipeForm {
             .filter(|s| !s.is_empty())
             .collect();
         if steps.is_empty() {
-            issue(Field::Steps, "Add at least one step.");
+            issue(Field::Steps, "Add at least one step.".into());
         }
         if !issues.is_empty() {
             return Err(issues);
         }
 
         let text = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
+        let mut tags: Vec<String> = Vec::new();
+        for t in &self.tags {
+            let t = t.trim().to_lowercase();
+            if !t.is_empty() && !tags.contains(&t) {
+                tags.push(t);
+            }
+        }
         let mut recipe = Recipe {
-            image: Some(format!("images/{id}.svg")),
+            image: Some(
+                self.image
+                    .clone()
+                    .unwrap_or_else(|| format!("images/{id}.svg")),
+            ),
             id,
             title: title.to_string(),
             author: text(&self.author),
@@ -340,22 +221,24 @@ impl RecipeForm {
             steps,
             description: text(&self.description),
             cuisine: text(&self.cuisine),
-            tags: self
-                .tags
-                .iter()
-                .map(|t| t.trim().to_lowercase())
-                .filter(|t| !t.is_empty())
-                .collect(),
+            tags,
             prep_time: prep.ok().flatten(),
             cook_time: cook.ok().flatten(),
         };
-        recipe.tags.dedup();
-        set_diet_tag(&mut recipe, &catalog);
+        set_diet_tag(&mut recipe, catalog);
         Ok(recipe)
     }
 
+    /// Heads-ups per ingredient row (never blocking): a unit the grocery list
+    /// can't add up for an ingredient the dictionary knows.
+    pub fn hint(&self, i: usize, catalog: &IngredientCatalog) -> Option<String> {
+        let row = self.ingredients.get(i)?;
+        let item = row_to_ingredient(row).ok()?;
+        unit_hint(&item, catalog)
+    }
+
     /// Fill a form from an existing recipe (for editing it).
-    pub fn from_recipe(recipe: &Recipe, catalog: &IngredientCatalog) -> RecipeForm {
+    pub fn from_recipe(recipe: &Recipe) -> RecipeForm {
         RecipeForm {
             title: recipe.title.clone(),
             author: recipe.author.clone().unwrap_or_default(),
@@ -364,19 +247,11 @@ impl RecipeForm {
             prep: recipe.prep_time.map(|m| m.to_string()).unwrap_or_default(),
             cook: recipe.cook_time.map(|m| m.to_string()).unwrap_or_default(),
             cuisine: recipe.cuisine.clone().unwrap_or_default(),
-            tags: recipe
-                .tags
-                .iter()
-                .filter(|t| *t != crate::filter::VEGETARIAN_TAG)
-                .cloned()
-                .collect(),
-            ingredients: recipe
-                .ingredients
-                .iter()
-                .map(|item| row_from_ingredient(item, catalog))
-                .collect(),
+            tags: recipe.tags.clone(),
+            ingredients: recipe.ingredients.iter().map(row_from_ingredient).collect(),
             steps: recipe.steps.clone(),
-            new_ingredients: Vec::new(),
+            id: Some(recipe.id.clone()),
+            image: recipe.image.clone(),
         }
     }
 }
@@ -403,83 +278,50 @@ pub fn parse_amount(s: &str) -> Option<f64> {
     match s.split_once('/') {
         Some((a, b)) => {
             let (a, b) = (parse_number(a.trim())?, parse_number(b.trim())?);
-            (b != 0.0).then(|| a / b)
+            Some(a / b)
         }
         None => parse_number(s),
     }
 }
 
-fn row_to_ingredient(
-    row: &IngredientRow,
-    catalog: &IngredientCatalog,
-) -> Result<RecipeIngredient, String> {
-    let Some((key, info)) = row.key.as_deref().and_then(|k| catalog.0.get_key_value(k)) else {
-        let name = row.name.trim();
+fn row_to_ingredient(row: &IngredientRow) -> Result<RecipeIngredient, String> {
+    let name = row.name.trim();
+    if name.is_empty() {
         return Err(format!(
-            "Pick “{name}” from the list, or add it as a new ingredient."
+            "Say what the ingredient with “{}” is.",
+            row.amount.trim()
         ));
-    };
+    }
     let amount = match row.amount.trim() {
         "" => None,
         typed => match parse_amount(typed) {
-            Some(a) if a > 0.0 && a.is_finite() => Some(a),
+            Some(a) if a.is_finite() => Some(a),
             _ => {
                 return Err(format!(
-                    "{}: the amount should be a number, like 200 or 1/2.",
-                    info.name
+                    "{name}: the amount should be a number, like 200 or 1/2."
                 ))
             }
         },
     };
-    // The shopping unit is implicit ("300 g lentils" is stored as just 300).
-    let unit = match row.unit.trim() {
-        "" => None,
-        u if Unit::parse(u) == Some(info.unit) => None,
-        u => Some(u.to_string()),
-    };
-    if amount.is_some() {
-        let ok = resolve_unit(unit.as_deref(), info.unit, info.count.as_ref())
-            .is_ok_and(|u| is_convertible(u, info.unit, info.count.as_ref()));
-        if !ok {
-            return Err(format!("{}: pick a unit from the list.", info.name));
-        }
-    }
-    let note = Some(row.note.trim().to_string()).filter(|n| !n.is_empty());
+    let text = |s: &str| Some(s.trim().to_string()).filter(|s| !s.is_empty());
     Ok(RecipeIngredient {
-        ingredient: key.clone(),
+        name: capitalize(name),
         amount,
-        unit: if amount.is_some() { unit } else { None },
-        note,
+        unit: amount.and_then(|_| text(&row.unit)),
+        note: text(&row.note),
         optional: row.optional,
+        aisle: row.aisle.clone(),
     })
 }
 
-pub(crate) fn row_from_ingredient(
-    item: &RecipeIngredient,
-    catalog: &IngredientCatalog,
-) -> IngredientRow {
-    let info = catalog.get(&item.ingredient);
-    let unit = info
-        .map(|info| {
-            let wanted = resolve_unit(item.unit.as_deref(), info.unit, info.count.as_ref()).ok();
-            unit_choices(info)
-                .into_iter()
-                .find(|c| {
-                    resolve_unit(Some(&c.value), info.unit, info.count.as_ref()).ok() == wanted
-                })
-                .map(|c| c.value)
-                .unwrap_or_else(|| default_unit(info))
-        })
-        .unwrap_or_default();
+pub(crate) fn row_from_ingredient(item: &RecipeIngredient) -> IngredientRow {
     IngredientRow {
-        name: info
-            .map(|i| i.name.clone())
-            .unwrap_or_else(|| item.ingredient.clone()),
-        key: Some(item.ingredient.clone()),
+        name: item.name.clone(),
         amount: item.amount.map(|a| format!("{a}")).unwrap_or_default(),
-        unit,
+        unit: item.unit.clone().unwrap_or_default(),
         note: item.note.clone().unwrap_or_default(),
         optional: item.optional,
+        aisle: item.aisle.clone(),
     }
 }
 
@@ -492,10 +334,9 @@ mod tests {
         load_catalog()
     }
 
-    fn row(key: &str, amount: &str, unit: &str) -> IngredientRow {
+    fn row(name: &str, amount: &str, unit: &str) -> IngredientRow {
         IngredientRow {
-            name: key.into(),
-            key: Some(key.into()),
+            name: name.into(),
             amount: amount.into(),
             unit: unit.into(),
             ..IngredientRow::default()
@@ -511,7 +352,7 @@ mod tests {
             tags: vec!["Dinner".into()],
             ingredients: vec![
                 row("lentils", "300", "g"),
-                row("garlic", "3", "clove"),
+                row("Garlic", "3", "cloves"),
                 row("salt", "", "g"),
                 IngredientRow::default(),
             ],
@@ -529,10 +370,9 @@ mod tests {
         assert_eq!(r.tags, ["dinner", "vegetarian"]);
         assert_eq!(r.steps, ["Simmer."]);
         assert_eq!(r.ingredients.len(), 3);
-        // The shopping unit is left implicit; a piece label is kept.
-        assert_eq!(r.ingredients[0].unit, None);
-        assert_eq!(r.ingredients[0].amount, Some(300.0));
-        assert_eq!(r.ingredients[1].unit.as_deref(), Some("clove"));
+        assert_eq!(r.ingredients[0].name, "Lentils");
+        assert_eq!(r.ingredients[0].unit.as_deref(), Some("g"));
+        assert_eq!(r.ingredients[1].unit.as_deref(), Some("cloves"));
         // No amount: to taste, no unit.
         assert_eq!(
             (r.ingredients[2].amount, r.ingredients[2].unit.clone()),
@@ -541,17 +381,25 @@ mod tests {
     }
 
     #[test]
+    fn any_ingredient_is_accepted() {
+        let mut form = filled();
+        form.ingredients.push(row("star anise", "2", ""));
+        form.ingredients.push(row("coriander", "1", "bunch"));
+        let r = form.to_recipe(&catalog()).unwrap();
+        assert_eq!(r.ingredients[3].name, "Star anise");
+        assert_eq!(r.ingredients[4].unit.as_deref(), Some("bunch"));
+        // Unknown ingredients: the vegetarian tag is the author's call.
+        assert_eq!(r.tags, ["dinner"]);
+        form.tags.push("vegetarian".into());
+        let r = form.to_recipe(&catalog()).unwrap();
+        assert_eq!(r.tags, ["dinner", "vegetarian"]);
+    }
+
+    #[test]
     fn what_is_missing_is_said_in_plain_words() {
         let form = RecipeForm {
             prep: "soon".into(),
-            ingredients: vec![
-                IngredientRow {
-                    name: "dragonfruit".into(),
-                    ..IngredientRow::default()
-                },
-                row("lentils", "lots", "g"),
-                row("lentils", "2", "tbsp"),
-            ],
+            ingredients: vec![row("", "2", ""), row("lentils", "lots", "g")],
             ..RecipeForm::default()
         };
         let fields: Vec<Field> = form
@@ -568,7 +416,6 @@ mod tests {
                 Field::Prep,
                 Field::Ingredient(0),
                 Field::Ingredient(1),
-                Field::Ingredient(2),
                 Field::Steps,
             ]
         );
@@ -577,55 +424,28 @@ mod tests {
     }
 
     #[test]
-    fn units_offered_are_the_ones_that_convert() {
-        let c = catalog();
-        let values = |key: &str| -> Vec<String> {
-            unit_choices(c.get(key).unwrap())
-                .into_iter()
-                .map(|u| u.value)
-                .collect()
+    fn units_that_dont_add_up_get_a_hint() {
+        let form = RecipeForm {
+            ingredients: vec![
+                row("flour", "1", "cup"),
+                row("lentils", "300", "g"),
+                row("star anise", "2", "cup"),
+            ],
+            ..RecipeForm::default()
         };
-        assert_eq!(values("lentils"), ["g", "kg"]);
-        assert!(values("garlic").contains(&"clove".to_string()));
-        assert_eq!(default_unit(c.get("garlic").unwrap()), "clove");
-        assert_eq!(default_unit(c.get("lentils").unwrap()), "g");
-        let labels: Vec<String> = unit_choices(c.get("garlic").unwrap())
-            .into_iter()
-            .map(|u| u.label)
-            .collect();
-        assert!(labels.contains(&"cloves".to_string()));
-    }
-
-    #[test]
-    fn a_typed_unit_is_kept_when_it_fits() {
         let c = catalog();
-        let garlic = c.get("garlic").unwrap();
-        let flour = c.get("flour").unwrap();
-        assert_eq!(fit_unit("cloves", garlic), "clove");
-        assert_eq!(fit_unit("", garlic), "clove");
-        assert_eq!(fit_unit("grams", flour), "g");
-        // A cup of flour needs a density the app doesn't have: kept, so it is asked about.
-        assert_eq!(fit_unit("cup", flour), "cup");
+        assert!(form.hint(0, &c).is_some_and(|h| h.contains("cup")));
+        assert_eq!(form.hint(1, &c), None);
+        // Unknown to the dictionary: nothing to compare against.
+        assert_eq!(form.hint(2, &c), None);
     }
 
     #[test]
-    fn new_ingredients_join_the_catalog() {
-        let mut form = filled();
-        let fruit = NewIngredient::new("dragon fruit", "Produce", Measure::Count);
-        assert_eq!(fruit.key, "dragon_fruit");
-        assert_eq!(fruit.name, "Dragon fruit");
-        form.new_ingredients.push(fruit.clone());
-        form.ingredients.push(row("dragon_fruit", "2", "pcs"));
-        let r = form.to_recipe(&catalog()).unwrap();
-        assert_eq!(r.ingredients.last().unwrap().ingredient, "dragon_fruit");
-        assert_eq!(r.ingredients.last().unwrap().unit, None);
-        assert_eq!(form.used_new_ingredients(), [&fruit]);
-        assert_eq!(
-            fruit.catalog_line(),
-            r#""dragon_fruit": {"name":"Dragon fruit","unit":"pcs","category":"Produce"},"#
-        );
-        form.ingredients.pop();
-        assert!(form.used_new_ingredients().is_empty());
+    fn unit_suggestions_follow_the_dictionary() {
+        let c = catalog();
+        assert_eq!(unit_suggestions("lentils", &c), ["g", "kg"]);
+        assert!(unit_suggestions("garlic", &c).contains(&"clove".to_string()));
+        assert_eq!(unit_suggestions("star anise", &c).len(), COMMON_UNITS.len());
     }
 
     #[test]
@@ -649,26 +469,10 @@ mod tests {
     fn every_bundled_recipe_round_trips_through_the_form() {
         let c = catalog();
         for recipe in load_recipes() {
-            let form = RecipeForm::from_recipe(&recipe, &c);
-            let back = form
+            let back = RecipeForm::from_recipe(&recipe)
                 .to_recipe(&c)
                 .unwrap_or_else(|e| panic!("{}: {e:?}", recipe.id));
-            assert_eq!(back.title, recipe.title, "{}", recipe.id);
-            assert_eq!(back.steps, recipe.steps, "{}", recipe.id);
-            assert_eq!(back.tags.len(), recipe.tags.len(), "{}", recipe.id);
-            assert_eq!(back.ingredients.len(), recipe.ingredients.len());
-            for (a, b) in back.ingredients.iter().zip(&recipe.ingredients) {
-                let info = c.get(&a.ingredient).unwrap();
-                let unit = |i: &RecipeIngredient| {
-                    resolve_unit(i.unit.as_deref(), info.unit, info.count.as_ref()).ok()
-                };
-                assert_eq!(
-                    (&a.ingredient, a.amount, unit(a), &a.note, a.optional),
-                    (&b.ingredient, b.amount, unit(b), &b.note, b.optional),
-                    "{}",
-                    recipe.id
-                );
-            }
+            assert_eq!(back, recipe, "{}", recipe.id);
         }
     }
 

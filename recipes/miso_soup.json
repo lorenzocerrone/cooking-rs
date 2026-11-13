@@ -10,11 +10,11 @@
   "prep_time": 5,
   "cook_time": 5,
   "ingredients": [
-    { "ingredient": "vegetable_broth", "amount": 600 },
-    { "ingredient": "miso_paste", "amount": 40 },
-    { "ingredient": "tofu", "amount": 150 },
-    { "ingredient": "wakame", "amount": 5 },
-    { "ingredient": "scallion", "amount": 20 }
+    { "name": "Vegetable broth", "amount": 600, "unit": "ml" },
+    { "name": "Miso paste", "amount": 40, "unit": "g" },
+    { "name": "Tofu", "amount": 150, "unit": "g" },
+    { "name": "Wakame seaweed", "amount": 5, "unit": "g" },
+    { "name": "Scallion", "amount": 20, "unit": "g" }
   ],
   "steps": [
     "Warm the broth (do not boil).",

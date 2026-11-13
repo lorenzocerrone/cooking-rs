@@ -1,17 +1,19 @@
 //! Data validation for the embedded recipes and ingredient catalog.
 //!
 //! These are `cargo test` tests (host only): CI runs them on every push, so a
-//! recipe with a typo'd field, an unknown ingredient, an unconvertible unit or a
-//! missing image fails the build instead of silently degrading the app. Each
+//! recipe with a typo'd field, a broken ingredient line, a wrong vegetarian tag
+//! or a missing image fails the build instead of silently degrading the app.
+//! Ingredient names are free; how well they match the dictionary is a report
+//! (`cargo run --bin ingredients`), not a failure. Each
 //! test collects *all* violations of one rule before failing so a data pass
 //! reads as a checklist.
 
 use std::collections::HashSet;
 use std::path::Path;
 
-use crate::filter::{meat_ingredients, VEGETARIAN_TAG};
-use crate::models::{IngredientCatalog, Recipe};
-use crate::quantity::{is_convertible, resolve_unit, Unit};
+use crate::filter::{meat_ingredients, unknown_ingredients, VEGETARIAN_TAG};
+use crate::models::{normalize_name, IngredientCatalog, Recipe};
+use crate::quantity::Unit;
 use crate::recipes::{parse_catalog, recipe_files};
 use crate::scaffold::TODO_STEP;
 use crate::shopping::CATEGORY_ORDER;
@@ -99,26 +101,10 @@ fn recipe_metadata_is_sound() {
 }
 
 #[test]
-fn every_recipe_ingredient_exists_in_catalog() {
-    let catalog = catalog();
-    let mut problems = Vec::new();
-    for r in recipes() {
-        for item in &r.ingredients {
-            if catalog.get(&item.ingredient).is_none() {
-                problems.push(format!(
-                    "{}: unknown ingredient `{}`",
-                    r.id, item.ingredient
-                ));
-            }
-        }
-    }
-    assert_no_problems("ingredient references", problems);
-}
-
-#[test]
 fn vegetarian_tag_matches_the_ingredients() {
-    // The Diet filter reads the tag, so it must say exactly what the
-    // ingredients say: tagged if and only if nothing comes from a meat aisle.
+    // The Diet filter reads the tag. Meat or fish (a dictionary aisle, or the
+    // line's own) rules it out; when the dictionary knows every ingredient and
+    // none is, it is required. With an unknown ingredient it is the author's call.
     let catalog = catalog();
     let mut problems = Vec::new();
     for r in recipes() {
@@ -130,7 +116,7 @@ fn vegetarian_tag_matches_the_ingredients() {
                 r.id,
                 meat.join(", ")
             ));
-        } else if !tagged && meat.is_empty() {
+        } else if !tagged && meat.is_empty() && unknown_ingredients(&r, &catalog).is_empty() {
             problems.push(format!(
                 "{}: no meat or fish, add the `{VEGETARIAN_TAG}` tag",
                 r.id
@@ -141,45 +127,38 @@ fn vegetarian_tag_matches_the_ingredients() {
 }
 
 #[test]
-fn every_recipe_quantity_is_valid_and_convertible() {
-    let catalog = catalog();
+fn every_ingredient_line_is_sound() {
+    // Any name is allowed; what must hold is that the line makes sense on its
+    // own. (Names the dictionary doesn't know, and units the grocery list can't
+    // add up, are reported by `cargo run --bin ingredients`, not failed.)
     let mut problems = Vec::new();
     for r in recipes() {
-        for item in &r.ingredients {
-            let Some(info) = catalog.get(&item.ingredient) else {
-                continue;
-            };
-            let at = format!("{}/{}", r.id, item.ingredient);
+        for (n, item) in r.ingredients.iter().enumerate() {
+            let at = format!("{}/ingredients[{n}] `{}`", r.id, item.name);
+            if item.name.trim().is_empty() {
+                problems.push(format!("{at}: empty name"));
+            }
             match item.amount {
-                None => {
-                    if item.unit.is_some() {
-                        problems.push(format!(
-                            "{at}: `unit` without `amount` (\"to taste\" has no unit)"
-                        ));
-                    }
-                }
+                None if item.unit.is_some() => problems.push(format!(
+                    "{at}: `unit` without `amount` (\"to taste\" has no unit)"
+                )),
                 Some(a) if a.is_nan() || a <= 0.0 => {
                     problems.push(format!("{at}: amount must be > 0, got {a}"))
                 }
-                Some(_) => match resolve_unit(item.unit.as_deref(), info.unit, info.count.as_ref())
-                {
-                    Err(e) => problems.push(format!("{at}: unknown unit `{}`", e.0)),
-                    Ok(unit) if !is_convertible(unit, info.unit, info.count.as_ref()) => {
-                        problems.push(format!(
-                            "{at}: `{}` cannot be converted into the shopping unit `{}` (add `count.per_piece` to the catalog entry)",
-                            unit.as_str(),
-                            info.unit.as_str()
-                        ));
-                    }
-                    Ok(_) => {}
-                },
+                _ => {}
             }
-            if item.note.as_deref().is_some_and(|n| n.trim().is_empty()) {
-                problems.push(format!("{at}: empty note"));
+            for (field, value) in [
+                ("unit", &item.unit),
+                ("note", &item.note),
+                ("aisle", &item.aisle),
+            ] {
+                if value.as_deref().is_some_and(|v| v.trim().is_empty()) {
+                    problems.push(format!("{at}: empty {field}"));
+                }
             }
         }
     }
-    assert_no_problems("recipe quantities", problems);
+    assert_no_problems("ingredient lines", problems);
 }
 
 #[test]
@@ -211,6 +190,23 @@ fn catalog_entries_are_sound() {
             }
             if c.plural.is_some() && c.label.is_none() {
                 problems.push(format!("{key}: count.plural without count.label"));
+            }
+        }
+    }
+    // Every name a recipe might use must point at one entry only.
+    let mut seen: std::collections::HashMap<String, &str> = std::collections::HashMap::new();
+    for (key, info) in &catalog.0 {
+        let names = std::iter::once(key.replace('_', " "))
+            .chain(std::iter::once(info.name.clone()))
+            .chain(info.aliases.iter().cloned());
+        for name in names {
+            let name = normalize_name(&name);
+            if name.is_empty() {
+                problems.push(format!("{key}: empty alias"));
+            } else if let Some(other) = seen.insert(name.clone(), key) {
+                if other != key {
+                    problems.push(format!("`{name}` names both {other} and {key}"));
+                }
             }
         }
     }

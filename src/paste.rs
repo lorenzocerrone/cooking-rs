@@ -1,21 +1,18 @@
 //! "Paste a recipe": turn recipe text copied from anywhere (a website, a
 //! message, a note) into a [`RecipeForm`] to check and finish. Best effort and
-//! never guessing a number: lines it recognises become picked ingredient rows,
-//! the rest become rows that ask for a pick (keeping the amount and unit typed).
-//! Pure: no Leptos, no browser access.
+//! never guessing a number; ingredient names are kept as written. Pure: no
+//! Leptos, no browser access.
 
 use crate::editor::{row_from_ingredient, IngredientRow, RecipeForm};
 use crate::extras::parse_number;
 use crate::models::IngredientCatalog;
 use crate::quantity::Unit;
-use crate::scaffold::{find_ingredient, parse_line, strip_numbering};
+use crate::scaffold::{parse_line, strip_numbering};
 
 /// What a paste filled in, for the confirmation message.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct PasteSummary {
     pub ingredients: usize,
-    /// Ingredient rows that still need a pick.
-    pub to_pick: usize,
     pub steps: usize,
 }
 
@@ -99,7 +96,6 @@ pub fn form_from_text(text: &str, catalog: &IngredientCatalog) -> (RecipeForm, P
 
     let summary = PasteSummary {
         ingredients: form.ingredients.len(),
-        to_pick: form.ingredients.iter().filter(|r| r.key.is_none()).count(),
         steps: form.steps.len(),
     };
     if form.ingredients.is_empty() {
@@ -282,7 +278,8 @@ fn looks_like_ingredient(line: &str, catalog: &IngredientCatalog) -> bool {
     line.len() <= SHORT_LINE
         && (starts_with_amount(&normalized)
             || strip_bullet(line).len() < line.len()
-            || parse_line(&normalized, catalog).is_ok())
+            || parse_line(&normalized, catalog)
+                .is_ok_and(|item| catalog.lookup(&item.name).is_some()))
 }
 
 fn looks_like_step(line: &str) -> bool {
@@ -307,100 +304,25 @@ fn push_step(form: &mut RecipeForm, line: &str) {
     }
 }
 
-/// One ingredient line as a form row: picked when the catalog knows it,
-/// otherwise kept as typed for the person to pick.
+/// One ingredient line as a form row, the name kept as written.
 fn ingredient_row(line: &str, catalog: &IngredientCatalog) -> IngredientRow {
     let normalized = normalize(line);
-    let mut row = parse_row(&normalized, catalog);
+    let mut row = match parse_line(&normalized, catalog) {
+        Ok(item) => row_from_ingredient(&item),
+        Err(_) => IngredientRow {
+            name: normalized.clone(),
+            ..IngredientRow::default()
+        },
+    };
+    // British "tin" is a can.
+    if matches!(row.unit.to_lowercase().as_str(), "tin" | "tins") {
+        row.unit = "can".into();
+    }
     // An empty amount already reads "to taste".
     if row.amount.is_empty() && row.note.eq_ignore_ascii_case("to taste") {
         row.note.clear();
     }
     row
-}
-
-fn parse_row(normalized: &str, catalog: &IngredientCatalog) -> IngredientRow {
-    if let Ok(item) = parse_line(normalized, catalog) {
-        return row_from_ingredient(&item, catalog);
-    }
-
-    // Split by hand: optional, note after a comma, amount, unit, name.
-    let mut body = normalized;
-    let mut optional = false;
-    let lower = body.to_lowercase();
-    if lower.ends_with("(optional)") {
-        body = body[..body.len() - "(optional)".len()].trim_end();
-        optional = true;
-    }
-    let (body, mut note) = match body.split_once(',') {
-        Some((b, n)) => (b.trim(), n.trim().to_string()),
-        None => (body, String::new()),
-    };
-    let mut tokens: Vec<&str> = body.split_whitespace().collect();
-    let amount = match tokens.first() {
-        Some(t) if crate::editor::parse_amount(t).is_some() => tokens.remove(0).to_string(),
-        _ => String::new(),
-    };
-    let mut unit = match tokens.first() {
-        Some(t) if !amount.is_empty() && tokens.len() > 1 && Unit::parse(t).is_some() => {
-            tokens.remove(0).to_string()
-        }
-        _ => String::new(),
-    };
-
-    // "red lentils" → lentils (note "red"); "cloves fresh garlic" → garlic in cloves.
-    for start in 0..tokens.len() {
-        let name = tokens[start..].join(" ");
-        if let Some((key, info)) = find_ingredient(catalog, &name) {
-            let mut extra: Vec<&str> = tokens[..start].to_vec();
-            if unit.is_empty() && !amount.is_empty() {
-                if let Some(first) = extra.first() {
-                    // British "tin" is the catalog's "can".
-                    let word = match first.to_lowercase().as_str() {
-                        "tin" | "tins" => "can".to_string(),
-                        w => w.to_string(),
-                    };
-                    if info.count.as_ref().is_some_and(|c| c.matches_label(&word)) {
-                        unit = info
-                            .count
-                            .as_ref()
-                            .and_then(|c| c.label.clone())
-                            .unwrap_or_default();
-                        extra.remove(0);
-                    }
-                }
-            }
-            if !extra.is_empty() {
-                let words = extra.join(" ");
-                note = if note.is_empty() {
-                    words
-                } else {
-                    format!("{words}, {note}")
-                };
-            }
-            let unit = if unit.is_empty() && !amount.is_empty() {
-                crate::editor::default_unit(info)
-            } else {
-                unit
-            };
-            return IngredientRow {
-                name: info.name.clone(),
-                key: Some(key.to_string()),
-                amount,
-                unit,
-                note,
-                optional,
-            };
-        }
-    }
-    IngredientRow {
-        name: tokens.join(" "),
-        key: None,
-        amount,
-        unit,
-        note,
-        optional,
-    }
 }
 
 #[cfg(test)]
@@ -410,6 +332,10 @@ mod tests {
 
     fn paste(text: &str) -> (RecipeForm, PasteSummary) {
         form_from_text(text, &load_catalog())
+    }
+
+    fn cells(row: &IngredientRow) -> (&str, &str, &str, &str) {
+        (&row.name, &row.amount, &row.unit, &row.note)
     }
 
     #[test]
@@ -424,10 +350,10 @@ mod tests {
              Ingredients\n\
              • 300g red lentils\n\
              • 1 large onion, finely chopped\n\
-             • 2 cloves fresh garlic\n\
+             • 2 cloves garlic\n\
              • 1½ tbsp olive oil\n\
              • 1 tin coconut milk\n\
-             • 1 cup flour\n\
+             • 2 bunches coriander\n\
              • Salt, to taste\n\
              • 2 star anise\n\
              \n\
@@ -444,65 +370,22 @@ mod tests {
             summary,
             PasteSummary {
                 ingredients: 8,
-                to_pick: 1,
                 steps: 2
             }
         );
-        let rows = &form.ingredients;
-        let lentils = &rows[0];
+        let rows: Vec<_> = form.ingredients.iter().map(cells).collect();
         assert_eq!(
-            (
-                lentils.key.as_deref(),
-                lentils.amount.as_str(),
-                lentils.unit.as_str(),
-                lentils.note.as_str()
-            ),
-            (Some("lentils"), "300", "g", "red")
-        );
-        assert_eq!(
-            (rows[1].key.as_deref(), rows[1].note.as_str()),
-            (Some("onion"), "large, finely chopped")
-        );
-        assert_eq!(
-            (
-                rows[2].key.as_deref(),
-                rows[2].unit.as_str(),
-                rows[2].note.as_str()
-            ),
-            (Some("garlic"), "clove", "fresh")
-        );
-        assert_eq!(
-            (rows[3].key.as_deref(), rows[3].amount.as_str()),
-            (Some("olive_oil"), "1.5")
-        );
-        assert_eq!(
-            (
-                rows[4].key.as_deref(),
-                rows[4].unit.as_str(),
-                rows[4].note.as_str()
-            ),
-            (Some("coconut_milk"), "can", "")
-        );
-        // A cup of flour can't be shopped (no density): picked, the unit asked about.
-        assert_eq!(
-            (rows[5].key.as_deref(), rows[5].unit.as_str()),
-            (Some("flour"), "cup")
-        );
-        assert_eq!(
-            (
-                rows[6].key.as_deref(),
-                rows[6].amount.as_str(),
-                rows[6].note.as_str()
-            ),
-            (Some("salt"), "", "")
-        );
-        assert_eq!(
-            (
-                rows[7].key.as_deref(),
-                rows[7].name.as_str(),
-                rows[7].amount.as_str()
-            ),
-            (None, "star anise", "2")
+            rows,
+            [
+                ("Red lentils", "300", "g", ""),
+                ("Large onion", "1", "", "finely chopped"),
+                ("Garlic", "2", "cloves", ""),
+                ("Olive oil", "1.5", "tbsp", ""),
+                ("Coconut milk", "1", "can", ""),
+                ("Coriander", "2", "bunches", ""),
+                ("Salt", "", "", ""),
+                ("Star anise", "2", "", ""),
+            ]
         );
         assert_eq!(
             form.steps,
@@ -527,7 +410,6 @@ mod tests {
         assert_eq!(form.title, "Pasta with peas");
         assert_eq!(form.author, "Nonna");
         assert_eq!(summary.ingredients, 3);
-        assert_eq!(summary.to_pick, 0);
         assert_eq!(form.steps.len(), 2);
     }
 

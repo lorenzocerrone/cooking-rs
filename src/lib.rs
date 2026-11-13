@@ -14,6 +14,7 @@ pub mod paste;
 pub mod pwa;
 pub mod quantity;
 pub mod recipes;
+pub mod report;
 pub mod scaffold;
 pub mod shopping;
 pub mod state;

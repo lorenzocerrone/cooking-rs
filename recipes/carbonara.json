@@ -10,11 +10,11 @@
   "prep_time": 10,
   "cook_time": 15,
   "ingredients": [
-    { "ingredient": "spaghetti", "amount": 200 },
-    { "ingredient": "guanciale", "amount": 100 },
-    { "ingredient": "egg", "amount": 4 },
-    { "ingredient": "pecorino", "amount": 50 },
-    { "ingredient": "black_pepper" }
+    { "name": "Spaghetti", "amount": 200, "unit": "g" },
+    { "name": "Guanciale", "amount": 100, "unit": "g" },
+    { "name": "Egg", "amount": 4 },
+    { "name": "Pecorino Romano", "amount": 50, "unit": "g" },
+    { "name": "Black pepper" }
   ],
   "steps": [
     "Boil the spaghetti in salted water.",

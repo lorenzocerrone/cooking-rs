@@ -14,7 +14,7 @@ the plan lives in the address bar, so sharing it is sending the link.
   filters stay in the URL, so a filtered list can be sent too; a full detail page
   with steps.
 - **Recipe editor** — a form for writing a recipe on the phone: pick ingredients from
-  the catalog (or add new ones), choose amounts and units, write the steps; it says
+  a list of common ones or type any other, choose amounts and units, write the steps; it says
   what is still missing and previews the recipe as the real page. "Paste a recipe"
   fills it in from text copied from a website or a message.
 - **Planner** — the next two weeks by date, from today; each day is a list of meals,
@@ -59,35 +59,12 @@ The deployable static site is written to `dist/`.
 
 ## Data model
 
-### Ingredient catalog (`ingredients.json`)
-
-One entry per ingredient, keyed by id. `unit` is the **shopping unit** — how you
-buy it and how the grocery list sums it — and must be `g`, `ml` or `pcs`. An
-optional `count` says how the ingredient is counted in pieces so recipes can use
-pieces and the list can still add things up:
-
-```json
-{
-  "spaghetti": { "name": "Spaghetti", "unit": "g",   "category": "Pasta & Grains" },
-  "egg":       { "name": "Egg",       "unit": "pcs", "category": "Dairy & Eggs" },
-  "onion":     { "name": "Onion",     "unit": "g",   "category": "Produce",
-                 "count": { "per_piece": 150 } },
-  "garlic":    { "name": "Garlic",    "unit": "g",   "category": "Produce",
-                 "count": { "label": "clove", "per_piece": 4 } },
-  "chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "pcs", "category": "Pantry",
-                 "count": { "label": "can", "per_piece": 400 } }
-}
-```
-
-`per_piece` is how much of the shopping unit one piece is. For a `pcs`-shopped
-ingredient it is the mass of one piece in grams, so "400 g chopped tomatoes"
-becomes one can.
-
 ### Recipes (`recipes/*.json`)
 
-Recipes reference catalog ingredients **by key**. `unit` may be any of
-`g kg ml l tsp tbsp cup pcs` or the ingredient's piece label; omit it to use the
-shopping unit. Omit `amount` for "to taste".
+A recipe is self-contained: each ingredient line names its ingredient as written.
+`unit` may be any of `g kg ml l tsp tbsp cup pcs`, the ingredient's piece label
+(`cloves`, `can`) or any piece word (`bunch`); omit it for a plain count ("2" eggs)
+and omit `amount` for "to taste".
 
 ```json
 {
@@ -96,21 +73,43 @@ shopping unit. Omit `amount` for "to taste".
   "author": "Lorenzo",
   "servings": 4,
   "cuisine": "Indian",
-  "tags": ["dinner", "vegetarian"],
+  "tags": ["dinner"],
   "prep_time": 10,
   "cook_time": 30,
   "image": "images/lentil_dal.svg",
   "ingredients": [
-    { "ingredient": "lentils", "amount": 300 },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
-    { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
-    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "chives", "amount": 5, "optional": true },
-    { "ingredient": "salt" }
+    { "name": "Lentils", "amount": 300, "unit": "g" },
+    { "name": "Onion", "amount": 1, "note": "finely chopped" },
+    { "name": "Garlic", "amount": 3, "unit": "cloves" },
+    { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Star anise", "amount": 2, "aisle": "Spices & Oils" },
+    { "name": "Salt" }
   ],
   "steps": ["…"]
 }
 ```
+
+### Ingredient dictionary (`ingredients.json`)
+
+Knowledge about common ingredients, looked up by name (key, name or an alias; any
+case, singular or plural). A known ingredient gets its grocery aisle, unit
+conversions and merging across recipes. `unit` is the **shopping unit** (`g`, `ml`
+or `pcs`), and `count` says how it is counted in pieces:
+
+```json
+{
+  "onion":    { "name": "Onion",    "unit": "g", "category": "Produce",
+                "count": { "per_piece": 150 } },
+  "garlic":   { "name": "Garlic",   "unit": "g", "category": "Produce",
+                "count": { "label": "clove", "per_piece": 4 } },
+  "scallion": { "name": "Scallion", "unit": "g", "category": "Produce",
+                "count": { "per_piece": 15 }, "aliases": ["spring onion", "green onion"] }
+}
+```
+
+Any other name works too, on its own grocery line (in its `aisle`, or "Other").
+`cargo run --bin ingredients` lists the names the dictionary doesn't know (with near
+matches) and amounts the grocery list can't add up; adding an alias is usually the fix.
 
 JSON Schemas for both files live in `schema/` and are wired up for VS Code in
 `.vscode/settings.json` (autocomplete and inline errors while editing).
@@ -119,12 +118,12 @@ JSON Schemas for both files live in `schema/` and are wired up for VS Code in
 
 The easy way: in Claude Code in this repo, paste or dictate a recipe, attach a photo
 of a recipe card, or send a link (or `/add-recipe`). The `add-recipe` skill
-(`.claude/skills/add-recipe/`) maps it onto the catalog, runs the scaffolder below,
+(`.claude/skills/add-recipe/`) matches it to the dictionary, runs the scaffolder below,
 shows one preview to confirm, runs the tests, commits, and asks before pushing. It
 also changes existing recipes ("make the carbonara serve 4").
 
 In the app, **Recipes → New** opens a form that builds the same recipe JSON (plus any
-new catalog entries), with a live preview.
+with a live preview.
 
 By hand, write a plain-text draft:
 
@@ -157,17 +156,16 @@ cargo test
 ```
 
 A leading number is the amount. The next word is the unit if it is one
-(`g kg ml l tsp tbsp cup pcs`) or the ingredient's piece label (`cloves`, `can`).
-A bare number counts pieces ("2 onion" is two onions), text after a comma is a
-note, and a line without an amount is "to taste". Every recipe needs an
-`author:` (the bundled ones say "Claude"), and the filter sheet gets an Author
-section as soon as there are two authors. The scaffolder adds the `vegetarian`
-tag itself when no ingredient is meat or fish. The scaffolder writes
-`recipes/<id>.json` and a placeholder `images/<id>.svg`. If anything is wrong
-(an unknown ingredient, a unit that doesn't convert), it lists every problem by
-line, prints a catalog entry to paste into `ingredients.json` for each unknown
-ingredient, and writes nothing. New catalog entries need an aisle from
-`shopping::CATEGORY_ORDER`.
+(`g kg ml l tsp tbsp cup pcs`), the ingredient's piece label (`cloves`, `can`) or
+a common piece word (`bunch`, `sprig`…). A bare number counts pieces ("2 onion" is
+two onions), text after a comma is a note, and a line without an amount is "to
+taste". Any ingredient name works. Every recipe needs an `author:` (the bundled
+ones say "Claude"), and the filter sheet gets an Author section as soon as there
+are two authors. The scaffolder sets the `vegetarian` tag when the dictionary knows
+every ingredient and none is meat or fish (otherwise write it yourself), and drops
+it when one is. It writes `recipes/<id>.json` and a placeholder `images/<id>.svg`;
+on a malformed line it lists every problem by line and writes nothing. Names the
+dictionary doesn't know and units the grocery list can't add up are warnings.
 
 ## Deploy (GitHub Pages)
 
@@ -184,7 +182,7 @@ If you rename the repo or use a user/root or custom-domain page, update **both**
 ## Project layout
 
 ```
-ingredients.json    ingredient catalog (embedded at build time)
+ingredients.json    ingredient dictionary (embedded at build time)
 recipes/            recipe data (embedded at build time)
 images/             per-recipe images (copied into dist/ via index.html)
 schema/             JSON Schemas for the two data files (editor support)
@@ -194,7 +192,8 @@ src/
   main.rs           wasm entry point: mounts the app
   bin/scaffold.rs   host-only recipe scaffolder (cargo run --bin scaffold)
   scaffold.rs       draft text -> validated Recipe, JSON + placeholder SVG (pure)
-  editor.rs         the editor's form -> validated Recipe, new catalog entries (pure)
+  editor.rs         the editor's form -> validated Recipe (pure)
+  report.rs         how ingredient names fit the dictionary (cargo run --bin ingredients)
   paste.rs          pasted recipe text -> a filled-in form (pure)
   app.rs            router + nav shell; owns the shared plan + grocery state
   models.rs         Recipe / RecipeIngredient / CatalogIngredient / MealPlan

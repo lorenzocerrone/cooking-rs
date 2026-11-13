@@ -10,11 +10,11 @@
   "prep_time": 10,
   "cook_time": 0,
   "ingredients": [
-    { "ingredient": "tomato", "amount": 300 },
-    { "ingredient": "mozzarella", "amount": 200 },
-    { "ingredient": "basil", "amount": 10 },
-    { "ingredient": "olive_oil", "amount": 20 },
-    { "ingredient": "salt" }
+    { "name": "Tomato", "amount": 300, "unit": "g" },
+    { "name": "Mozzarella", "amount": 200, "unit": "g" },
+    { "name": "Basil", "amount": 10, "unit": "g" },
+    { "name": "Olive oil", "amount": 20, "unit": "ml" },
+    { "name": "Salt" }
   ],
   "steps": [
     "Slice the tomatoes and mozzarella into rounds.",
