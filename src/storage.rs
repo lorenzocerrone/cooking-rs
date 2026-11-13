@@ -249,6 +249,31 @@ pub fn save(state: &PersistedState) {
     }
 }
 
+/// Key of the unsent recipe draft in the editor (plain text, this device only).
+const DRAFT_KEY: &str = "cooking-rs.draft";
+
+/// The recipe draft being written, empty if none (or unreadable).
+pub fn load_draft() -> String {
+    leptos::prelude::window()
+        .local_storage()
+        .ok()
+        .flatten()
+        .and_then(|store| store.get_item(DRAFT_KEY).ok().flatten())
+        .unwrap_or_default()
+}
+
+/// Keep the draft across reloads; an empty draft removes the key. Failures are
+/// ignored, as for [`save`].
+pub fn save_draft(text: &str) {
+    if let Ok(Some(store)) = leptos::prelude::window().local_storage() {
+        let _ = if text.trim().is_empty() {
+            store.remove_item(DRAFT_KEY)
+        } else {
+            store.set_item(DRAFT_KEY, text)
+        };
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

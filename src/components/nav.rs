@@ -8,7 +8,7 @@ use crate::shopping::aggregate;
 
 /// The three tabs: a bottom bar on phones, a top bar on wider screens (CSS). The
 /// grocery tab shows how many items are still to buy. Hidden on the recipe page
-/// so the recipe gets the whole screen.
+/// and in the editor so they get the whole screen.
 #[component]
 pub fn Nav() -> impl IntoView {
     let data = use_app_data();
@@ -29,8 +29,11 @@ pub fn Nav() -> impl IntoView {
     });
 
     let location = use_location();
-    let recipe_prefix = href("/recipe/");
-    let on_recipe = move || location.pathname.get().starts_with(&recipe_prefix);
+    let (recipe_prefix, editor) = (href("/recipe/"), href("/new"));
+    let on_recipe = move || {
+        let path = location.pathname.get();
+        path.starts_with(&recipe_prefix) || path == editor
+    };
 
     view! {
         <nav class="nav" class:nav--hidden=on_recipe>

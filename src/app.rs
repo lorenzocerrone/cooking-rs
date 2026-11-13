@@ -6,7 +6,7 @@ use leptos_router::path;
 use crate::components::{today, Nav, Toast};
 use crate::date::Date;
 use crate::models::MealPlan;
-use crate::pages::{GroceryPage, PlannerPage, RecipeDetailPage, RecipesPage};
+use crate::pages::{GroceryPage, NewRecipePage, PlannerPage, RecipeDetailPage, RecipesPage};
 use crate::recipes::{load_data, AppData};
 use crate::state::{read_hash, write_hash};
 use crate::storage::{self, GroceryState, PersistedState};
@@ -84,6 +84,7 @@ pub fn App() -> impl IntoView {
                 <Routes fallback=|| view! { <p class="muted">"Page not found."</p> }>
                     <Route path=path!("/") view=RecipesPage />
                     <Route path=path!("/recipe/:id") view=RecipeDetailPage />
+                    <Route path=path!("/new") view=NewRecipePage />
                     <Route path=path!("/planner") view=PlannerPage />
                     <Route path=path!("/grocery") view=GroceryPage />
                 </Routes>

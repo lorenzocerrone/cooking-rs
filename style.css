@@ -1124,3 +1124,78 @@ h1 {
     animation: none !important;
   }
 }
+
+/* ---------- Recipe editor ---------- */
+.page-head .count {
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+.editor {
+  display: grid;
+  gap: 14px;
+}
+
+.draft {
+  width: 100%;
+  min-height: 18em;
+  padding: 11px 12px;
+  border: 1px solid var(--rule-mid);
+  border-radius: var(--radius);
+  background: var(--inset);
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.draft::placeholder {
+  color: var(--faint);
+}
+
+.draft-help summary {
+  cursor: pointer;
+}
+
+.draft-help ul,
+.draft-check ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+
+.draft-help code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.draft-check {
+  padding: 10px 12px;
+  border: 1px solid var(--rule-mid);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.draft-check--bad {
+  border-color: var(--danger);
+}
+
+.draft-check--bad ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.draft-check--bad li {
+  display: grid;
+  grid-template-columns: 4.5em 1fr;
+  gap: 8px;
+  overflow-wrap: anywhere;
+}
+
+.recipe--preview {
+  padding-top: 4px;
+  border-top: 1px dashed var(--rule-mid);
+}

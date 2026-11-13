@@ -52,6 +52,24 @@ pub fn RecipeDetailPage() -> impl IntoView {
 
 #[component]
 fn RecipeDetail(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
+    view! {
+        <article class="recipe">
+            <div class="recipe__bar">
+                <A href=href("/") attr:class="back">
+                    <IconBack />
+                    "Recipes"
+                </A>
+                <AddToWeek recipe_id=recipe.id.clone() recipe_title=recipe.title.clone() />
+            </div>
+            <RecipeBody recipe=recipe catalog=catalog />
+        </article>
+    }
+}
+
+/// The recipe itself: heading, servings stepper, scaled ingredients and steps
+/// you can tap off. Shared by the recipe page and the editor's preview.
+#[component]
+pub fn RecipeBody(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
     let base_servings = recipe.servings.max(1);
     let servings = RwSignal::new(base_servings);
     let factor = move || servings.get() as f64 / base_servings as f64;
@@ -78,97 +96,87 @@ fn RecipeDetail(recipe: Recipe, catalog: IngredientCatalog) -> impl IntoView {
     let catalog = StoredValue::new(catalog);
 
     view! {
-        <article class="recipe">
-            <div class="recipe__bar">
-                <A href=href("/") attr:class="back">
-                    <IconBack />
-                    "Recipes"
-                </A>
-                <AddToWeek recipe_id=recipe.id.clone() recipe_title=recipe.title.clone() />
-            </div>
+        <header class="recipe__head">
+            {(!eyebrow.is_empty()).then(|| view! { <p class="eyebrow">{eyebrow}</p> })}
+            <h1>{recipe.title.clone()}</h1>
+            {recipe.description.clone().map(|d| view! { <p class="recipe__desc">{d}</p> })}
+        </header>
 
-            <header class="recipe__head">
-                {(!eyebrow.is_empty()).then(|| view! { <p class="eyebrow">{eyebrow}</p> })}
-                <h1>{recipe.title.clone()}</h1>
-                {recipe.description.clone().map(|d| view! { <p class="recipe__desc">{d}</p> })}
-            </header>
+        <div class="recipe__scale">
+            <Stepper
+                value=servings
+                label="servings"
+                on_change=Callback::new(move |v| servings.set(v))
+            />
+            {(!timing.is_empty()).then(|| view! { <span class="mono muted">{timing}</span> })}
+        </div>
 
-            <div class="recipe__scale">
-                <Stepper
-                    value=servings
-                    label="servings"
-                    on_change=Callback::new(move |v| servings.set(v))
-                />
-                {(!timing.is_empty()).then(|| view! { <span class="mono muted">{timing}</span> })}
-            </div>
-
-            <ul class="ingredients">
-                {move || {
-                    let f = factor();
-                    ingredients.with_value(|items| {
-                        items
-                            .iter()
-                            .map(|item| {
-                                let (name, amount) = catalog.with_value(|c| {
-                                    (
-                                        c.get(&item.ingredient)
-                                            .map(|i| i.name.clone())
-                                            .unwrap_or_else(|| item.ingredient.clone()),
-                                        format_ingredient_amount_scaled(item, c, f),
-                                    )
-                                });
-                                let note = item.note.clone();
-                                let optional = item.optional;
-                                view! {
-                                    <li>
-                                        <span>
-                                            {name}
-                                            {note.map(|n| view! { <small class="muted">{format!(", {n}")}</small> })}
-                                            {optional.then(|| view! { <small class="muted">" (optional)"</small> })}
-                                        </span>
-                                        <span class="mono">{amount}</span>
-                                    </li>
-                                }
-                            })
-                            .collect_view()
-                    })
-                }}
-            </ul>
-
-            <p class="eyebrow">"Method"</p>
-            <ol class="steps">
-                {recipe
-                    .steps
-                    .iter()
-                    .cloned()
-                    .enumerate()
-                    .map(|(i, step)| {
-                        let is_done = move || done.with(|d| d.get(i).copied().unwrap_or(false));
-                        let toggle = move |_| {
-                            done.update(|d| {
-                                if let Some(v) = d.get_mut(i) {
-                                    *v = !*v;
-                                }
-                            })
-                        };
-                        view! {
-                            <li class:done=is_done>
-                                <button
-                                    type="button"
-                                    class="step"
-                                    aria-pressed=move || is_done().to_string()
-                                    on:click=toggle
-                                >
-                                    <span class="step__n mono">
-                                        {move || if is_done() { "✓".to_string() } else { (i + 1).to_string() }}
+        <ul class="ingredients">
+            {move || {
+                let f = factor();
+                ingredients.with_value(|items| {
+                    items
+                        .iter()
+                        .map(|item| {
+                            let (name, amount) = catalog.with_value(|c| {
+                                (
+                                    c.get(&item.ingredient)
+                                        .map(|i| i.name.clone())
+                                        .unwrap_or_else(|| item.ingredient.clone()),
+                                    format_ingredient_amount_scaled(item, c, f),
+                                )
+                            });
+                            let note = item.note.clone();
+                            let optional = item.optional;
+                            view! {
+                                <li>
+                                    <span>
+                                        {name}
+                                        {note.map(|n| view! { <small class="muted">{format!(", {n}")}</small> })}
+                                        {optional.then(|| view! { <small class="muted">" (optional)"</small> })}
                                     </span>
-                                    <span>{step}</span>
-                                </button>
-                            </li>
-                        }
-                    })
-                    .collect_view()}
-            </ol>
-        </article>
+                                    <span class="mono">{amount}</span>
+                                </li>
+                            }
+                        })
+                        .collect_view()
+                })
+            }}
+        </ul>
+
+        <p class="eyebrow">"Method"</p>
+        <ol class="steps">
+            {recipe
+                .steps
+                .iter()
+                .cloned()
+                .enumerate()
+                .map(|(i, step)| {
+                    let is_done = move || done.with(|d| d.get(i).copied().unwrap_or(false));
+                    let toggle = move |_| {
+                        done.update(|d| {
+                            if let Some(v) = d.get_mut(i) {
+                                *v = !*v;
+                            }
+                        })
+                    };
+                    view! {
+                        <li class:done=is_done>
+                            <button
+                                type="button"
+                                class="step"
+                                aria-pressed=move || is_done().to_string()
+                                on:click=toggle
+                            >
+                                <span class="step__n mono">
+                                    {move || if is_done() { "✓".to_string() } else { (i + 1).to_string() }}
+                                </span>
+                                <span>{step}</span>
+                            </button>
+                        </li>
+                    }
+                })
+                .collect_view()}
+        </ol>
     }
 }

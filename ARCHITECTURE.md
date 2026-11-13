@@ -191,11 +191,16 @@ src/
     mod.rs            also today() (local browser date) and rolling_dates(today, plan)
                       (14 days from today, or through the last planned day).
   pages/
-    recipes_page.rs       Compact list with search + filter sheet; rows link to the recipe.
+    recipes_page.rs       Compact list with search + filter sheet; rows link to the recipe;
+                          "New" opens the editor.
                           The query lives in the URL's query string (state::read_search /
                           write_search), so it survives a round trip to a recipe.
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
-                          tappable steps (not persisted), AddToWeek.
+                          tappable steps (not persisted), AddToWeek. Its body (RecipeBody)
+                          is shared with the editor's preview.
+    new_recipe_page.rs    Recipe editor (/new): a plain-text draft checked by
+                          scaffold::parse_draft on every keystroke, problems listed by line or
+                          a live preview; the draft is kept in localStorage; "Copy JSON".
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
@@ -373,11 +378,26 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   `window.confirm`: "Meals only" keeps the extras, "Everything" drops them too; both clear
   the grocery ticks and keep the at-home items.
 
+- **Phase 12 — Recipe editor, step 1.** A `/new` page ("New" on the recipes list): the
+  draft format in a text box, checked by the scaffolder on every keystroke (it is pure, so
+  it runs in the browser too), problems by line, or a live preview with the recipe page's
+  own body; a notice when the id would replace an existing recipe; the draft survives
+  reloads; "Copy JSON".
+
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Live with it.** A week of real planning and one shop on the phone; a fix round
-   follows and re-prioritises the polish below.
+1. **Recipe editor** — an easy way to add and change recipes from the phone, with every
+   change landing as a pull request (recipes stay reviewed JSON in git):
+   - **Edit:** an "Edit" button on the recipe page opens the editor filled in; needs a
+     recipe → draft function and a round-trip test.
+   - **New ingredients in the draft:** a section naming each new ingredient's unit, aisle
+     and piece size, so one draft carries everything a change needs.
+   - **Save as a pull request:** "Save" opens a prefilled GitHub issue (draft text); a
+     plain GitHub Action (no AI, no secrets) runs the scaffolder, adds catalog entries and
+     `cargo test`, then opens a PR that closes the issue, or comments the problems. Runs
+     only for the maintainer's issues or a label; may touch only `recipes/`, `images/`
+     and `ingredients.json`. Nothing merges by itself.
 2. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
 3. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
@@ -433,8 +453,9 @@ Recorded so the reasoning isn't lost; neither is scheduled or agreed.
 "Why is this on the list" is done: the grocery row sheet shows the recipes that need it.
 
 ### Non-goals (for now)
-User accounts, a backend/database, server-side rendering, nutrition tracking, in-app
-recipe editing, and image hosting. The app stays a static, link-shareable SPA.
+User accounts, a backend/database, server-side rendering, nutrition tracking, storing
+recipes anywhere but git (the editor drafts; a reviewed pull request saves), and image
+hosting. The app stays a static, link-shareable SPA.
 
 ---
 

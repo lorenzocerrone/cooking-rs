@@ -55,6 +55,32 @@ enum Section {
     Steps,
 }
 
+/// A complete draft in the format [`parse_draft`] reads: the editor's
+/// placeholder, kept valid against the real catalog by a test.
+pub const DRAFT_EXAMPLE: &str = "Lentil Dal
+author: Lorenzo
+servings: 4
+cuisine: Indian
+tags: dinner
+prep: 10
+cook: 30
+
+300 g lentils
+1 onion, finely chopped
+3 cloves garlic
+1/2 can coconut milk
+salt
+
+Steps
+Soften the onion and garlic in olive oil.
+Simmer everything for 25 minutes.";
+
+/// The first line of a problem message. Messages written for the terminal
+/// continue with a catalog stub to paste; the editor shows only the headline.
+pub fn headline(message: &str) -> &str {
+    message.lines().next().unwrap_or_default()
+}
+
 /// Parse a whole draft. Every problem is collected, so one run lists them all.
 pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec<Problem>> {
     let mut problems = Vec::new();
@@ -588,6 +614,25 @@ mod tests {
             }"#,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn draft_example_parses_against_the_real_catalog() {
+        let draft = parse_draft(DRAFT_EXAMPLE, &crate::recipes::load_catalog())
+            .expect("the editor's example draft is valid");
+        assert!(draft.warnings.is_empty(), "{:?}", draft.warnings);
+        assert_eq!(draft.recipe.id, "lentil_dal");
+    }
+
+    #[test]
+    fn headline_is_the_first_line() {
+        let problems =
+            parse_draft("Soup\nauthor: Me\n\n200 g dragonfruit", &catalog()).unwrap_err();
+        assert_eq!(
+            headline(&problems[0].message),
+            "unknown ingredient `dragonfruit`"
+        );
+        assert_eq!(headline(""), "");
     }
 
     fn item(key: &str, amount: Option<f64>, unit: Option<&str>) -> RecipeIngredient {

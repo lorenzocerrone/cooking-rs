@@ -13,6 +13,8 @@ the plan lives in the address bar, so sharing it is sending the link.
   (vegetarian or not, author, cuisine, time, tags; pick several at once); the
   filters stay in the URL, so a filtered list can be sent too; a full detail page
   with steps.
+- **Recipe editor** — write a recipe as a plain-text draft on the phone; it is checked
+  against the ingredient catalog as you type and previewed as the real recipe page.
 - **Planner** — the next two weeks by date, from today; each day is a list of meals,
   added from a searchable picker or a recipe's "Add to week", with per-meal servings and
   a Share button. Past days drop off on their own.
@@ -118,6 +120,9 @@ of a recipe card, or send a link (or `/add-recipe`). The `add-recipe` skill
 (`.claude/skills/add-recipe/`) maps it onto the catalog, runs the scaffolder below,
 shows one preview to confirm, runs the tests, commits, and asks before pushing. It
 also changes existing recipes ("make the carbonara serve 4").
+
+In the app, **Recipes → New** opens an editor for the same draft format: it checks the
+draft as you type, lists problems by line, previews the recipe, and copies its JSON.
 
 By hand, write a plain-text draft:
 
