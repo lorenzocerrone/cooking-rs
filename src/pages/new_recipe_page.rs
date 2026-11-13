@@ -4,12 +4,13 @@ use leptos_router::components::A;
 use crate::app::{href, notify, use_app_data};
 use crate::components::{IconBack, IconClose, IconPlus, Modal, Stepper};
 use crate::editor::{
-    default_unit, unit_choices, Field, IngredientRow, Issue, Measure, NewIngredient, RecipeForm,
+    fit_unit, unit_choices, Field, IngredientRow, Issue, Measure, NewIngredient, RecipeForm,
 };
 use crate::extras::suggest;
 use crate::filter::{Facets, VEGETARIAN_TAG};
 use crate::models::{IngredientCatalog, Recipe};
 use crate::pages::RecipeBody;
+use crate::paste::form_from_text;
 use crate::scaffold::{render_json, slug};
 use crate::shopping::CATEGORY_ORDER;
 use crate::storage::{load_form, save_form};
@@ -62,13 +63,13 @@ impl Editor {
         });
     }
 
-    /// Set row `i` to the catalog ingredient `key`, starting from its usual unit.
+    /// Set row `i` to the catalog ingredient `key`, keeping a typed unit that fits.
     fn pick(self, i: usize, key: String) {
         let info = self.catalog.with_untracked(|c| c.get(&key).cloned());
         if let Some(info) = info {
             self.update_row(i, |row| {
                 row.name = info.name.clone();
-                row.unit = default_unit(&info);
+                row.unit = fit_unit(&row.unit, &info);
                 row.key = Some(key);
             });
         }
@@ -97,6 +98,7 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
     };
 
     let start_over = RwSignal::new(false);
+    let paste_open = RwSignal::new(false);
     let copy_json = move |_| {
         let Ok(recipe) = result.get_untracked() else {
             return;
@@ -136,6 +138,9 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
 
             <header class="page-head">
                 <h1>"New recipe"</h1>
+                <button type="button" class="btn" on:click=move |_| paste_open.set(true)>
+                    "Paste a recipe"
+                </button>
             </header>
 
             <About ed=ed facets=facets />
@@ -186,6 +191,7 @@ fn RecipeEditor(recipes: Vec<Recipe>, catalog: IngredientCatalog) -> impl IntoVi
         </article>
 
         <NewIngredientSheet ed=ed />
+        <PasteSheet ed=ed open=paste_open />
 
         <Modal open=start_over title="Start over?">
             <p class="muted">"This clears the whole form."</p>
@@ -542,9 +548,19 @@ fn PickedIngredient(ed: Editor, i: usize, picked: Memo<Option<String>>) -> impl 
                 >
                     {move || {
                         let current = row().unit;
-                        info()
-                            .map(|x| unit_choices(&x))
-                            .unwrap_or_default()
+                        let choices = info().map(|x| unit_choices(&x)).unwrap_or_default();
+                        // A pasted unit that doesn't work for this ingredient
+                        // stays visible until another one is chosen.
+                        let stray = (!current.is_empty()
+                            && !choices.iter().any(|c| c.value == current))
+                            .then(|| {
+                                view! {
+                                    <option value=current.clone() selected=true disabled=true>
+                                        {format!("{current}?")}
+                                    </option>
+                                }
+                            });
+                        let options = choices
                             .into_iter()
                             .map(|c| {
                                 let selected = c.value == current;
@@ -554,7 +570,8 @@ fn PickedIngredient(ed: Editor, i: usize, picked: Memo<Option<String>>) -> impl 
                                     </option>
                                 }
                             })
-                            .collect_view()
+                            .collect_view();
+                        (stray, options)
                     }}
                 </select>
             </div>
@@ -793,6 +810,69 @@ fn NewIngredientSheet(ed: Editor) -> impl IntoView {
                         on:click=add
                     >
                         "Use this ingredient"
+                    </button>
+                </div>
+            </div>
+        </Modal>
+    }
+}
+
+/// "Paste a recipe": text copied from anywhere fills the form, to be checked.
+#[component]
+fn PasteSheet(ed: Editor, open: RwSignal<bool>) -> impl IntoView {
+    let text = RwSignal::new(String::new());
+    let fill = move |_| {
+        let (mut pasted, summary) = ed
+            .catalog
+            .with_untracked(|c| form_from_text(&text.get_untracked(), c));
+        ed.form.update(|f| {
+            // Keep what the paste doesn't say (often the author).
+            if pasted.author.is_empty() {
+                pasted.author = f.author.clone();
+            }
+            pasted.new_ingredients = f.new_ingredients.clone();
+            *f = pasted;
+        });
+        open.set(false);
+        text.set(String::new());
+        let mut message = format!(
+            "Filled in {} ingredient{} and {} step{}",
+            summary.ingredients,
+            if summary.ingredients == 1 { "" } else { "s" },
+            summary.steps,
+            if summary.steps == 1 { "" } else { "s" },
+        );
+        if summary.to_pick > 0 {
+            message.push_str(&format!(" · {} to pick", summary.to_pick));
+        }
+        notify(message);
+    };
+    view! {
+        <Modal open=open title="Paste a recipe">
+            <div class="sheet-form">
+                <p class="field__hint">
+                    "Copy a recipe from a website, a message or a note and paste it here. "
+                    "It fills in the form; check every row afterwards."
+                </p>
+                <textarea
+                    class="field__input"
+                    rows="10"
+                    aria-label="Recipe text"
+                    placeholder="Name\nServes 4\n\nIngredients\n300 g lentils\n1 onion, chopped\n\nMethod\nSoften the onion…"
+                    prop:value=move || text.get()
+                    on:input=move |ev| text.set(event_target_value(&ev))
+                ></textarea>
+                <Show when=move || !ed.form.with(RecipeForm::is_blank)>
+                    <p class="form-warn">"This replaces what is in the form now."</p>
+                </Show>
+                <div class="form-actions">
+                    <button
+                        type="button"
+                        class="btn btn--primary"
+                        prop:disabled=move || text.with(|t| t.trim().is_empty())
+                        on:click=fill
+                    >
+                        "Fill in the form"
                     </button>
                 </div>
             </div>

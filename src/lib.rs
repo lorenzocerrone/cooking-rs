@@ -10,6 +10,7 @@ pub mod filter;
 pub mod format;
 pub mod models;
 pub mod pages;
+pub mod paste;
 pub mod pwa;
 pub mod quantity;
 pub mod recipes;

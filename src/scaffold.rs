@@ -227,7 +227,7 @@ fn is_steps_marker(line: &str) -> bool {
 }
 
 /// "1. Boil" / "2) Boil" / "- Boil" → "Boil".
-fn strip_numbering(line: &str) -> &str {
+pub(crate) fn strip_numbering(line: &str) -> &str {
     let rest = line.trim_start_matches(|c: char| c.is_ascii_digit());
     let rest = if rest.len() < line.len() {
         rest.strip_prefix('.')

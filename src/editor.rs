@@ -192,6 +192,26 @@ pub fn default_unit(info: &CatalogIngredient) -> String {
     }
 }
 
+/// The unit a row keeps when its ingredient is picked: the matching choice
+/// for what was typed or pasted ("tablespoons" → `tbsp`, "cloves" → `clove`),
+/// the ingredient's usual unit when nothing was, and the typed text otherwise
+/// (so the form asks for a unit instead of silently changing the amount).
+pub fn fit_unit(typed: &str, info: &CatalogIngredient) -> String {
+    let typed = typed.trim();
+    if typed.is_empty() {
+        return default_unit(info);
+    }
+    let count = info.count.as_ref();
+    let Ok(wanted) = resolve_unit(Some(typed), info.unit, count) else {
+        return typed.to_string();
+    };
+    unit_choices(info)
+        .into_iter()
+        .find(|c| resolve_unit(Some(&c.value), info.unit, count) == Ok(wanted))
+        .map(|c| c.value)
+        .unwrap_or_else(|| typed.to_string())
+}
+
 /// Which part of the form something is wrong with.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Field {
@@ -434,7 +454,10 @@ fn row_to_ingredient(
     })
 }
 
-fn row_from_ingredient(item: &RecipeIngredient, catalog: &IngredientCatalog) -> IngredientRow {
+pub(crate) fn row_from_ingredient(
+    item: &RecipeIngredient,
+    catalog: &IngredientCatalog,
+) -> IngredientRow {
     let info = catalog.get(&item.ingredient);
     let unit = info
         .map(|info| {
@@ -571,6 +594,18 @@ mod tests {
             .map(|u| u.label)
             .collect();
         assert!(labels.contains(&"cloves".to_string()));
+    }
+
+    #[test]
+    fn a_typed_unit_is_kept_when_it_fits() {
+        let c = catalog();
+        let garlic = c.get("garlic").unwrap();
+        let flour = c.get("flour").unwrap();
+        assert_eq!(fit_unit("cloves", garlic), "clove");
+        assert_eq!(fit_unit("", garlic), "clove");
+        assert_eq!(fit_unit("grams", flour), "g");
+        // A cup of flour needs a density the app doesn't have: kept, so it is asked about.
+        assert_eq!(fit_unit("cup", flour), "cup");
     }
 
     #[test]

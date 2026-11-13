@@ -15,7 +15,8 @@ the plan lives in the address bar, so sharing it is sending the link.
   with steps.
 - **Recipe editor** — a form for writing a recipe on the phone: pick ingredients from
   the catalog (or add new ones), choose amounts and units, write the steps; it says
-  what is still missing and previews the recipe as the real page.
+  what is still missing and previews the recipe as the real page. "Paste a recipe"
+  fills it in from text copied from a website or a message.
 - **Planner** — the next two weeks by date, from today; each day is a list of meals,
   added from a searchable picker or a recipe's "Add to week", with per-meal servings and
   a Share button. Past days drop off on their own.
@@ -194,6 +195,7 @@ src/
   bin/scaffold.rs   host-only recipe scaffolder (cargo run --bin scaffold)
   scaffold.rs       draft text -> validated Recipe, JSON + placeholder SVG (pure)
   editor.rs         the editor's form -> validated Recipe, new catalog entries (pure)
+  paste.rs          pasted recipe text -> a filled-in form (pure)
   app.rs            router + nav shell; owns the shared plan + grocery state
   models.rs         Recipe / RecipeIngredient / CatalogIngredient / MealPlan
   quantity.rs       units, dimensions, piece specs, conversions (pure)

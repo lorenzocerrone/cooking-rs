@@ -162,7 +162,13 @@ src/
                     rows with a picked catalog key, steps, new ingredients made in the form)
                     → to_recipe (Recipe, or Issues in plain words by field); from_recipe (for
                     editing; every bundled recipe round-trips in a test); unit_choices (only
-                    units that convert for the ingredient) and default_unit.
+                    units that convert for the ingredient), default_unit and fit_unit (a
+                    typed or pasted unit kept when it fits).
+  paste.rs          Pure LOGIC for "Paste a recipe": form_from_text reads copied text
+                    (Ingredients/Method headers or none; serves, prep/cook times, "by …";
+                    bullets, ½ and 1 1/2, "300g"; "red lentils" → lentils + note "red",
+                    "2 cloves fresh garlic", "tin" = can) into a RecipeForm; lines it can't
+                    place become rows to pick, keeping the amount and unit typed.
   format.rs         Pure DISPLAY FORMATTING (no Leptos): format_day(_inline) ("Today",
                     "Tomorrow", "Mon 27 Oct"), format_range, format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
@@ -209,7 +215,8 @@ src/
                           ingredient" sheet (name, aisle, by weight/volume/piece); amount +
                           a unit picker of convertible units; steps. "To finish" lists what
                           is missing; a complete recipe shows the live preview and "Copy
-                          JSON". The form is kept in localStorage; "Start over" clears it.
+                          JSON". "Paste a recipe" fills the form from copied text. The form
+                          is kept in localStorage; "Start over" clears it.
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
@@ -393,16 +400,16 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   that convert; new ingredients from a sheet (name, aisle, how it is measured); steps.
   Missing things are listed in plain words; a complete recipe gets a live preview with the
   recipe page's own body and a notice if it would replace an existing one. The form
-  survives reloads; "Copy JSON" includes the new catalog lines. (A first version took the
-  scaffolder's text draft; it was too technical and was replaced by the form.)
+  survives reloads; "Copy JSON" includes the new catalog lines. "Paste a recipe" fills the
+  form from text copied from a website or a message, and says how many rows still need a
+  pick. (A first version took the scaffolder's text draft; it was too technical and was
+  replaced by the form.)
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
 1. **Recipe editor** — an easy way to add and change recipes from the phone, with every
    change landing as a pull request (recipes stay reviewed JSON in git):
-   - **Paste a recipe:** paste text copied from anywhere; `scaffold::parse_line` fills the
-     rows it recognises, the rest become rows asking for a pick.
    - **Edit:** an "Edit" button on the recipe page opens the form filled in
      (`RecipeForm::from_recipe` exists and is tested).
    - **Save as a pull request:** "Save" opens a prefilled GitHub issue (the recipe JSON and
