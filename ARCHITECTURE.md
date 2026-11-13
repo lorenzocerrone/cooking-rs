@@ -156,7 +156,13 @@ src/
                     garlic", "1/2 can coconut milk, note (optional)"; a bare number counts
                     pieces; units must convert); find_ingredient (key/name, singular/plural,
                     no guessing); unknown ingredients get extras::suggest hints and a
-                    catalog stub; render_json (house style) and render_svg (placeholder).
+                    catalog stub; render_json (house style) and render_svg (placeholder);
+                    set_diet_tag (shared with the editor).
+  editor.rs         Pure LOGIC for the recipe editor: RecipeForm (fields as typed, ingredient
+                    rows with a picked catalog key, steps, new ingredients made in the form)
+                    → to_recipe (Recipe, or Issues in plain words by field); from_recipe (for
+                    editing; every bundled recipe round-trips in a test); unit_choices (only
+                    units that convert for the ingredient) and default_unit.
   format.rs         Pure DISPLAY FORMATTING (no Leptos): format_day(_inline) ("Today",
                     "Tomorrow", "Mon 27 Oct"), format_range, format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
@@ -198,9 +204,12 @@ src/
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
                           tappable steps (not persisted), AddToWeek. Its body (RecipeBody)
                           is shared with the editor's preview.
-    new_recipe_page.rs    Recipe editor (/new): a plain-text draft checked by
-                          scaffold::parse_draft on every keystroke, problems listed by line or
-                          a live preview; the draft is kept in localStorage; "Copy JSON".
+    new_recipe_page.rs    Recipe editor (/new): a form over editor::RecipeForm. Ingredient
+                          rows search the catalog (extras::suggest) or open the "New
+                          ingredient" sheet (name, aisle, by weight/volume/piece); amount +
+                          a unit picker of convertible units; steps. "To finish" lists what
+                          is missing; a complete recipe shows the live preview and "Copy
+                          JSON". The form is kept in localStorage; "Start over" clears it.
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
@@ -378,24 +387,28 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   `window.confirm`: "Meals only" keeps the extras, "Everything" drops them too; both clear
   the grocery ticks and keep the at-home items.
 
-- **Phase 12 — Recipe editor, step 1.** A `/new` page ("New" on the recipes list): the
-  draft format in a text box, checked by the scaffolder on every keystroke (it is pure, so
-  it runs in the browser too), problems by line, or a live preview with the recipe page's
-  own body; a notice when the id would replace an existing recipe; the draft survives
-  reloads; "Copy JSON".
+- **Phase 12 — Recipe editor (form).** A `/new` page ("New" on the recipes list) for
+  people who don't code: name, author, servings, times, cuisine and tag chips; ingredient
+  rows picked from the catalog with an amount and a unit picker that only offers units
+  that convert; new ingredients from a sheet (name, aisle, how it is measured); steps.
+  Missing things are listed in plain words; a complete recipe gets a live preview with the
+  recipe page's own body and a notice if it would replace an existing one. The form
+  survives reloads; "Copy JSON" includes the new catalog lines. (A first version took the
+  scaffolder's text draft; it was too technical and was replaced by the form.)
 
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
 1. **Recipe editor** — an easy way to add and change recipes from the phone, with every
    change landing as a pull request (recipes stay reviewed JSON in git):
-   - **Edit:** an "Edit" button on the recipe page opens the editor filled in; needs a
-     recipe → draft function and a round-trip test.
-   - **New ingredients in the draft:** a section naming each new ingredient's unit, aisle
-     and piece size, so one draft carries everything a change needs.
-   - **Save as a pull request:** "Save" opens a prefilled GitHub issue (draft text); a
-     plain GitHub Action (no AI, no secrets) runs the scaffolder, adds catalog entries and
-     `cargo test`, then opens a PR that closes the issue, or comments the problems. Runs
+   - **Paste a recipe:** paste text copied from anywhere; `scaffold::parse_line` fills the
+     rows it recognises, the rest become rows asking for a pick.
+   - **Edit:** an "Edit" button on the recipe page opens the form filled in
+     (`RecipeForm::from_recipe` exists and is tested).
+   - **Save as a pull request:** "Save" opens a prefilled GitHub issue (the recipe JSON and
+     any new catalog entries); a plain GitHub Action (no AI, no secrets) writes the files
+     and the placeholder image, runs `cargo test`, then opens a PR that closes the issue,
+     or comments the problems. Runs
      only for the maintainer's issues or a label; may touch only `recipes/`, `images/`
      and `ingredients.json`. Nothing merges by itself.
 2. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,

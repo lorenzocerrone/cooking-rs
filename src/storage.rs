@@ -13,6 +13,7 @@ use std::collections::BTreeSet;
 use serde::{Deserialize, Serialize};
 
 use crate::date::Date;
+use crate::editor::RecipeForm;
 use crate::models::{MealPlan, PlanWire};
 use crate::quantity::Dimension;
 use crate::shopping::{ShoppingCategory, ShoppingLine};
@@ -249,27 +250,27 @@ pub fn save(state: &PersistedState) {
     }
 }
 
-/// Key of the unsent recipe draft in the editor (plain text, this device only).
-const DRAFT_KEY: &str = "cooking-rs.draft";
+/// Key of the recipe being written in the editor (this device only).
+const FORM_KEY: &str = "cooking-rs.recipe-form";
 
-/// The recipe draft being written, empty if none (or unreadable).
-pub fn load_draft() -> String {
+/// The recipe form being filled in, or a fresh one.
+pub fn load_form() -> RecipeForm {
     leptos::prelude::window()
         .local_storage()
         .ok()
         .flatten()
-        .and_then(|store| store.get_item(DRAFT_KEY).ok().flatten())
+        .and_then(|store| store.get_item(FORM_KEY).ok().flatten())
+        .and_then(|raw| serde_json::from_str(&raw).ok())
         .unwrap_or_default()
 }
 
-/// Keep the draft across reloads; an empty draft removes the key. Failures are
+/// Keep the form across reloads; a blank form removes the key. Failures are
 /// ignored, as for [`save`].
-pub fn save_draft(text: &str) {
+pub fn save_form(form: &RecipeForm) {
     if let Ok(Some(store)) = leptos::prelude::window().local_storage() {
-        let _ = if text.trim().is_empty() {
-            store.remove_item(DRAFT_KEY)
-        } else {
-            store.set_item(DRAFT_KEY, text)
+        let _ = match serde_json::to_string(form) {
+            Ok(raw) if !form.is_blank() => store.set_item(FORM_KEY, &raw),
+            _ => store.remove_item(FORM_KEY),
         };
     }
 }

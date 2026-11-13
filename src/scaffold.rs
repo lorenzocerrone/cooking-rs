@@ -55,32 +55,6 @@ enum Section {
     Steps,
 }
 
-/// A complete draft in the format [`parse_draft`] reads: the editor's
-/// placeholder, kept valid against the real catalog by a test.
-pub const DRAFT_EXAMPLE: &str = "Lentil Dal
-author: Lorenzo
-servings: 4
-cuisine: Indian
-tags: dinner
-prep: 10
-cook: 30
-
-300 g lentils
-1 onion, finely chopped
-3 cloves garlic
-1/2 can coconut milk
-salt
-
-Steps
-Soften the onion and garlic in olive oil.
-Simmer everything for 25 minutes.";
-
-/// The first line of a problem message. Messages written for the terminal
-/// continue with a catalog stub to paste; the editor shows only the headline.
-pub fn headline(message: &str) -> &str {
-    message.lines().next().unwrap_or_default()
-}
-
 /// Parse a whole draft. Every problem is collected, so one run lists them all.
 pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec<Problem>> {
     let mut problems = Vec::new();
@@ -216,17 +190,7 @@ pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec
             "no steps: wrote a `{TODO_STEP}` step; `cargo test` fails until it is replaced"
         ));
     }
-    // The Diet filter reads the tag; set it from the ingredients.
-    let meat = meat_ingredients(&recipe_meta, catalog).join(", ");
-    let tagged = recipe_meta.tags.iter().any(|t| t == VEGETARIAN_TAG);
-    if meat.is_empty() && !tagged {
-        recipe_meta.tags.push(VEGETARIAN_TAG.into());
-    } else if !meat.is_empty() && tagged {
-        recipe_meta.tags.retain(|t| t != VEGETARIAN_TAG);
-        warnings.push(format!(
-            "dropped the `{VEGETARIAN_TAG}` tag: it uses {meat}"
-        ));
-    }
+    warnings.extend(set_diet_tag(&mut recipe_meta, catalog));
     Ok(Draft {
         recipe: Recipe {
             image: Some(format!("images/{id}.svg")),
@@ -237,6 +201,22 @@ pub fn parse_draft(text: &str, catalog: &IngredientCatalog) -> Result<Draft, Vec
         },
         warnings,
     })
+}
+
+/// The Diet filter reads the `vegetarian` tag: add it when no ingredient is
+/// meat or fish, drop it (with a warning) when one is.
+pub fn set_diet_tag(recipe: &mut Recipe, catalog: &IngredientCatalog) -> Option<String> {
+    let meat = meat_ingredients(recipe, catalog).join(", ");
+    let tagged = recipe.tags.iter().any(|t| t == VEGETARIAN_TAG);
+    if meat.is_empty() && !tagged {
+        recipe.tags.push(VEGETARIAN_TAG.into());
+    } else if !meat.is_empty() && tagged {
+        recipe.tags.retain(|t| t != VEGETARIAN_TAG);
+        return Some(format!(
+            "dropped the `{VEGETARIAN_TAG}` tag: it uses {meat}"
+        ));
+    }
+    None
 }
 
 fn is_steps_marker(line: &str) -> bool {
@@ -460,7 +440,7 @@ pub fn catalog_stub(name: &str, counted: bool, label: Option<&str>) -> String {
     )
 }
 
-fn capitalize(s: &str) -> String {
+pub fn capitalize(s: &str) -> String {
     let mut chars = s.chars();
     match chars.next() {
         Some(first) => first.to_uppercase().chain(chars).collect(),
@@ -614,25 +594,6 @@ mod tests {
             }"#,
         )
         .unwrap()
-    }
-
-    #[test]
-    fn draft_example_parses_against_the_real_catalog() {
-        let draft = parse_draft(DRAFT_EXAMPLE, &crate::recipes::load_catalog())
-            .expect("the editor's example draft is valid");
-        assert!(draft.warnings.is_empty(), "{:?}", draft.warnings);
-        assert_eq!(draft.recipe.id, "lentil_dal");
-    }
-
-    #[test]
-    fn headline_is_the_first_line() {
-        let problems =
-            parse_draft("Soup\nauthor: Me\n\n200 g dragonfruit", &catalog()).unwrap_err();
-        assert_eq!(
-            headline(&problems[0].message),
-            "unknown ingredient `dragonfruit`"
-        );
-        assert_eq!(headline(""), "");
     }
 
     fn item(key: &str, amount: Option<f64>, unit: Option<&str>) -> RecipeIngredient {

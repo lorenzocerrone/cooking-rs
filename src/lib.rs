@@ -4,6 +4,7 @@
 pub mod app;
 pub mod components;
 pub mod date;
+pub mod editor;
 pub mod extras;
 pub mod filter;
 pub mod format;

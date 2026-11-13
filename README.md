@@ -13,8 +13,9 @@ the plan lives in the address bar, so sharing it is sending the link.
   (vegetarian or not, author, cuisine, time, tags; pick several at once); the
   filters stay in the URL, so a filtered list can be sent too; a full detail page
   with steps.
-- **Recipe editor** — write a recipe as a plain-text draft on the phone; it is checked
-  against the ingredient catalog as you type and previewed as the real recipe page.
+- **Recipe editor** — a form for writing a recipe on the phone: pick ingredients from
+  the catalog (or add new ones), choose amounts and units, write the steps; it says
+  what is still missing and previews the recipe as the real page.
 - **Planner** — the next two weeks by date, from today; each day is a list of meals,
   added from a searchable picker or a recipe's "Add to week", with per-meal servings and
   a Share button. Past days drop off on their own.
@@ -121,8 +122,8 @@ of a recipe card, or send a link (or `/add-recipe`). The `add-recipe` skill
 shows one preview to confirm, runs the tests, commits, and asks before pushing. It
 also changes existing recipes ("make the carbonara serve 4").
 
-In the app, **Recipes → New** opens an editor for the same draft format: it checks the
-draft as you type, lists problems by line, previews the recipe, and copies its JSON.
+In the app, **Recipes → New** opens a form that builds the same recipe JSON (plus any
+new catalog entries), with a live preview.
 
 By hand, write a plain-text draft:
 
@@ -192,6 +193,7 @@ src/
   main.rs           wasm entry point: mounts the app
   bin/scaffold.rs   host-only recipe scaffolder (cargo run --bin scaffold)
   scaffold.rs       draft text -> validated Recipe, JSON + placeholder SVG (pure)
+  editor.rs         the editor's form -> validated Recipe, new catalog entries (pure)
   app.rs            router + nav shell; owns the shared plan + grocery state
   models.rs         Recipe / RecipeIngredient / CatalogIngredient / MealPlan
   quantity.rs       units, dimensions, piece specs, conversions (pure)
