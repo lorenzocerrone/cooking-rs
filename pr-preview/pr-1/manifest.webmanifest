@@ -1,0 +1,14 @@
+{
+  "name": "cooking-rs — recipes, week, grocery",
+  "short_name": "cooking-rs",
+  "description": "Organize recipes, plan the week and get the grocery list.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#EFE8D8",
+  "theme_color": "#A85E30",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
