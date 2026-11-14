@@ -22,7 +22,7 @@ grocery ticks.
   bottom sheets, tap-to-tick rows); wider screens get a top bar; the plan is one rolling list of dates everywhere.
 - **Correct grocery math.** Recipes use natural units ("1 onion", "3 cloves", "2 tbsp",
   "1 can"); the list converts into each ingredient's shopping unit and sums exactly.
-- **Validated data.** `cargo test` rejects any recipe or catalog file that would degrade the
+- **Validated data.** `cargo test` rejects any recipe or dictionary file that would degrade the
   app (unparseable, unknown ingredient, unconvertible unit, missing image).
 - **Simple, modern Rust.** Leptos (client-side rendering) + Trunk, small focused modules,
   logic kept free of UI types so it is unit-testable on the host.
@@ -97,7 +97,7 @@ pages/*           PAGE composition — wires data/signals into components
 ```
 
 ```
-ingredients.json    Central ingredient catalog (embedded). key → {name, unit, category, count?}.
+ingredients.json    Ingredient dictionary (embedded). key → {name, unit, category, count?, aliases?}.
 recipes/*.json      Recipes (embedded). Reference ingredients by key + amount (+ unit, note, optional).
 schema/*.json       JSON Schemas for the two files (editor autocomplete; tests are the truth).
 build.rs            `rerun-if-changed` for recipes/ and the catalog, so adding/removing a file
@@ -125,38 +125,58 @@ src/
                     with parse/as_str/to_base; Quantity; CountSpec {label, plural, per_piece};
                     resolve_unit (recipe text → Unit, incl. piece labels); to_shopping
                     (Quantity → ingredient's shopping unit, or Other(dimension) if no conversion).
-  models.rs         Domain types: Recipe, RecipeIngredient {ingredient, amount?, unit?, note?,
-                    optional}, CatalogIngredient {name, unit: Unit, category, count?},
-                    IngredientCatalog, MealPlan {dates: BTreeMap<Date, DayPlan>, extras} / PlanWire
-                    (dated or legacy weekday wire shape → into_plan(today)) / DayPlan {meals} /
-                    MealEntry /
-                    Extra {Catalog | Custom}. All data structs deny unknown fields.
+  models.rs         Domain types: Recipe, RecipeIngredient {name (as written), amount?,
+                    unit?, note?, optional, aisle?}, measure (a line's unit: a Unit, a piece
+                    label of a known ingredient, or a free piece word; none = a count),
+                    CatalogIngredient {name, unit: Unit, category, count?, aliases},
+                    IngredientCatalog (the dictionary; lookup by key, name or alias, any case,
+                    singular/plural), MealPlan {dates: BTreeMap<Date, DayPlan>, extras} /
+                    PlanWire (dated or legacy weekday wire shape → into_plan(today)) /
+                    DayPlan {meals} / MealEntry / Extra {Catalog | Custom}. All data structs
+                    deny unknown fields.
   recipes.rs        Data-loading BOUNDARY. recipe_files() (per-file parse results),
                     load_recipes()/parse_catalog()/load_catalog()/load_data() → AppData.
                     Embedded today; async-first so a future HTTP loader is a one-file change.
-  validate.rs       #[cfg(test)] data validation: files parse, ids match file names, refs
-                    resolve, units convert, catalog units are base units, images exist.
+  validate.rs       #[cfg(test)] data validation: files parse, ids match file names,
+                    ingredient lines are sound, the vegetarian tag is right, dictionary
+                    entries are sound and no name points at two, images exist.
+  report.rs         Pure LOGIC: ingredient_report — names the dictionary doesn't know (with
+                    near matches) and amounts the grocery list can't add up. A to-do list,
+                    never a failure; `cargo run --bin ingredients` prints it.
   shopping.rs       Pure LOGIC: aggregate(plan, from, to, recipes, catalog) → the meals dated
                     from..=to (extras always) as category-grouped
                     ShoppingLines {key, name, count, subtotals (base units, primary first),
-                    to_taste, optional, sources, custom_quantities}; catalog extras folded
-                    in unscaled, custom extras as `custom:*` lines in the "Other" aisle (last).
+                    to_taste, optional, sources, custom_quantities}. A known ingredient's line
+                    is keyed by its dictionary key; an unknown one by `custom:<name>` in its
+                    own aisle (or "Other"), merging same-named lines and custom extras. Free
+                    piece words sum by word ("3 bunches") beside the rest. aisle(item).
   filter.rs         Pure LOGIC: RecipeQuery {search, diet, authors, cuisines, tags,
                     max_minutes} + filter(): any-of within diet/author/cuisine, all-of for
                     tags, AND across sections. FilterOption (one selectable value: toggle,
                     is_on, label), option_count (per value, given the other sections),
                     Facets::of (sections' values), to/from_query_string (the recipes page
-                    URL), Diet read from the `vegetarian` tag, meat_ingredients (catalog
-                    Meat/Fish aisles; the scaffolder sets the tag, validation checks it).
+                    URL), Diet read from the `vegetarian` tag, meat_ingredients (Meat/Fish
+                    aisle) and unknown_ingredients (the scaffolder and editor set the tag,
+                    validation checks it).
   extras.rs         Pure LOGIC for the free-text extras line: parse_extra ("milk 1 l" →
-                    name + quantity), suggest (catalog matches), to_extra (catalog item when
+                    name + quantity), suggest (dictionary names and aliases), to_extra (item when
                     the unit converts, otherwise a custom item kept as typed).
   scaffold.rs       Pure LOGIC for the scaffolder: parse_draft (title, `key: value` headers,
-                    ingredient lines, "Steps") → Recipe; parse_line ("1 red onion", "3 cloves
-                    garlic", "1/2 can coconut milk, note (optional)"; a bare number counts
-                    pieces; units must convert); find_ingredient (key/name, singular/plural,
-                    no guessing); unknown ingredients get extras::suggest hints and a
-                    catalog stub; render_json (house style) and render_svg (placeholder).
+                    ingredient lines, "Steps") → Recipe plus warnings; parse_line ("1 red
+                    onion", "3 cloves garlic", "2 bunches coriander", "1/2 can coconut milk,
+                    note (optional)"; any name; units written out, a bare number counts);
+                    unit_hint (a unit the list can't add up for a known ingredient);
+                    set_diet_tag; render_json (house style) and render_svg (placeholder).
+  editor.rs         Pure LOGIC for the recipe editor: RecipeForm (fields as typed; ingredient
+                    rows of free text; steps; the id and image kept when editing) →
+                    to_recipe (Recipe, or Issues in plain words by field); hint (non-blocking
+                    unit heads-up per row); from_recipe (every bundled recipe round-trips in
+                    a test); unit_suggestions (convertible units and piece labels for a known
+                    ingredient, the common units otherwise).
+  paste.rs          Pure LOGIC for "Paste a recipe": form_from_text reads copied text
+                    (Ingredients/Method headers or none; serves, prep/cook times, "by …";
+                    bullets, ½ and 1 1/2, "300g", "tin" = can) into a RecipeForm, names kept
+                    as written.
   format.rs         Pure DISPLAY FORMATTING (no Leptos): format_day(_inline) ("Today",
                     "Tomorrow", "Mon 27 Oct"), format_range, format_quantity (authored unit),
                     format_ingredient_amount(_scaled), format_subtotal (kg/l step-up, whole
@@ -191,11 +211,21 @@ src/
     mod.rs            also today() (local browser date) and rolling_dates(today, plan)
                       (14 days from today, or through the last planned day).
   pages/
-    recipes_page.rs       Compact list with search + filter sheet; rows link to the recipe.
+    recipes_page.rs       Compact list with search + filter sheet; rows link to the recipe;
+                          "New" opens the editor.
                           The query lives in the URL's query string (state::read_search /
                           write_search), so it survives a round trip to a recipe.
     recipe_detail_page.rs Single recipe (/recipe/:id): servings stepper rescales ingredients,
-                          tappable steps (not persisted), AddToWeek.
+                          tappable steps (not persisted), AddToWeek. Its body (RecipeBody)
+                          is shared with the editor's preview.
+    new_recipe_page.rs    Recipe editor (/new): a form over editor::RecipeForm. Ingredient
+                          rows take any name; while typing, dictionary names (and aliases)
+                          are suggested, and a known one shows its aisle. Amount + unit
+                          (suggested per ingredient), note, optional; a non-blocking hint for
+                          units that won't add up; steps. "To finish" lists what is missing;
+                          a complete recipe shows the live preview and "Copy JSON". "Paste a
+                          recipe" fills the form from copied text. The form is kept in
+                          localStorage; "Start over" clears it.
     planner_page.rs       "Plan": Share button (copies the address), the rolling dates from
                           today (cards for today and days with meals, thin rows for empty
                           days, a "next week" divider before Mondays), meal sheet
@@ -213,8 +243,8 @@ src/
   `load_data()` (async, `Resource` + `<Suspense>`). Switching to runtime HTTP fetch means
   rewriting only the loader bodies; pages are untouched.
 - **`quantity.rs` — the unit boundary.** The only place that knows what a tablespoon is.
-  Recipes keep `unit` as text (labels like "clove" need the catalog to resolve); the catalog's
-  `unit` is a typed `Unit`. Conversion always targets the ingredient's shopping unit; when
+  Recipes keep `unit` as text (labels like "clove" need the dictionary to resolve; free piece
+  words like "bunch" never do); the dictionary's `unit` is a typed `Unit`. Conversion always targets the ingredient's shopping unit; when
   none exists the amount is kept in its own dimension rather than dropped.
 - **`state.rs` / `storage.rs` — the URL and persistence boundaries.** Pure encode/decode
   cores with host tests; the `window` access is a few small wrappers. **The URL is the
@@ -232,38 +262,46 @@ src/
 
 ## 5. Data model
 
-**Ingredient catalog** (`ingredients.json`) — one keyed entry per ingredient with a **shopping
-unit** (`g`, `ml` or `pcs`), an aisle `category`, and an optional `count` describing pieces:
-
-```json
-"onion":  { "name": "Onion",  "unit": "g",   "category": "Produce", "count": { "per_piece": 150 } },
-"garlic": { "name": "Garlic", "unit": "g",   "category": "Produce", "count": { "label": "clove", "per_piece": 4 } },
-"egg":    { "name": "Egg",    "unit": "pcs", "category": "Dairy & Eggs", "count": { "per_piece": 55 } },
-"chopped_tomatoes": { "name": "Chopped tomatoes", "unit": "pcs", "category": "Pantry",
-                      "count": { "label": "can", "per_piece": 400 } }
-```
-
-`per_piece` is one piece expressed in the shopping unit (for a `pcs` ingredient: grams per
-piece, so "100 g" of it can still be converted). The author decides how a thing is bought:
-onion in grams (1 onion → 150 g) or canned tomatoes by the can (400 g → 1 can).
-
-**Recipe** (`recipes/*.json`) — references catalog ingredients by key. Each ingredient has an
-optional `amount` (absent = "to taste"), `unit` (any `Unit` spelling or the ingredient's piece
-label; absent = shopping unit), `note`, and `optional`. Everything beyond the core fields is
-optional and old files keep parsing; unknown fields are rejected (typos fail validation).
+**Recipe** (`recipes/*.json`) — self-contained. Each ingredient line names its ingredient as
+written, with an optional `amount` (absent = "to taste"), `unit` (any `Unit` spelling, a
+piece label, or any piece word like "bunch"; absent = a plain count), `note`, `optional`, and
+`aisle` (only used when the dictionary doesn't know the name). Unknown fields are rejected
+(typos fail validation).
 
 ```json
 { "id": "lentil_dal", "title": "Lentil Dal", "author": "Claude", "servings": 4,
   "image": "images/lentil_dal.svg",
-  "ingredients": [ { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
-                   { "ingredient": "garlic", "amount": 3, "unit": "cloves" },
-                   { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-                   { "ingredient": "salt" } ],
+  "ingredients": [ { "name": "Onion", "amount": 1, "note": "finely chopped" },
+                   { "name": "Garlic", "amount": 3, "unit": "cloves" },
+                   { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+                   { "name": "Star anise", "amount": 2, "aisle": "Spices & Oils" },
+                   { "name": "Salt" } ],
   "steps": ["…"] }
 ```
 
-**Grocery aggregation** — for each contribution: resolve the unit, scale by servings,
-`to_shopping` it, add into the line's per-dimension totals. A line shows its primary
+**Ingredient dictionary** (`ingredients.json`) — optional knowledge about common
+ingredients, looked up by a line's name (key, display name or alias; any case; singular or
+plural; never fuzzier than that). An entry gives the grocery aisle, a **shopping unit**
+(`g`, `ml` or `pcs`) that amounts convert into, an optional `count` describing pieces, and
+`aliases`:
+
+```json
+"onion":  { "name": "Onion",  "unit": "g",   "category": "Produce", "count": { "per_piece": 150 } },
+"garlic": { "name": "Garlic", "unit": "g",   "category": "Produce", "count": { "label": "clove", "per_piece": 4 } },
+"scallion": { "name": "Scallion", "unit": "g", "category": "Produce", "count": { "per_piece": 15 },
+              "aliases": ["spring onion", "green onion"] }
+```
+
+`per_piece` is one piece expressed in the shopping unit (for a `pcs` ingredient: grams per
+piece). A name the dictionary doesn't know still works: its own grocery line (keyed by the
+name, any case), amounts summed per dimension, piece words per word. Keeping names
+consistent is a reviewable job, not an input constraint: `cargo run --bin ingredients`
+lists unknown names (with near matches) and amounts that won't add up, and the fix is
+usually an alias.
+
+**Grocery aggregation** — for each contribution: look the name up, resolve the unit, scale by
+servings, `to_shopping` it (known ingredients) or keep it in its own dimension (unknown),
+add into the line's per-dimension totals; free piece words sum per word. A line shows its primary
 (shopping-unit) sub-total first and any unconvertible sub-total after ("2 pcs + 100 g").
 Display rounds to shop-friendly values (kg/l above 1000, whole pieces rounded up).
 
@@ -275,9 +313,10 @@ shape and maps each weekday (Monday = 0) to its next date on or after today. A `
 added — no fixed breakfast/lunch/dinner slots. On the wire a day is a JSON array; the decoder
 also accepts the original `{breakfast, lunch, dinner}` object (slots become list entries). A
 `MealEntry` serializes as a bare string when servings are default and as an object otherwise.
-`extras` are `Extra`s: `Catalog(RecipeIngredient)` (the pre-existing shape, summed like recipe
-lines) or `Custom {name, quantity?}` (free text, shown as typed in the "Other" aisle);
-omitted when empty.
+`extras` are `Extra`s: `Catalog(RecipeIngredient)` (summed like recipe lines; older links
+wrote `ingredient` for `name`, still accepted) or `Custom {name, quantity}` (free text, shown
+as typed on the line of the same name, else in "Other"; `quantity` is always written so it
+reads back as custom); omitted when empty.
 
 **Persisted state** (localStorage key `cooking-rs.state`; `plan` is the last plan opened) —
 `{ version: 3, plan, grocery: { checked: [{key, subtotals}], omitted: [key], hide_to_taste,
@@ -289,11 +328,13 @@ sticky.
 
 **Invariants** (enforced by `src/validate.rs` under `cargo test`): every data file parses;
 recipe `id` equals the file stem and is unique; every recipe has an `author` ("Claude" marks
-the generated ones, which the recipe filter can then separate from your own); every ingredient key exists; every unit
-resolves and converts into the ingredient's shopping unit; catalog units are base units;
-every recipe image exists on disk; no step is the scaffolder's `TODO`; every catalog category
-is an aisle in `shopping::CATEGORY_ORDER`; a recipe is tagged `vegetarian` exactly when no
-ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
+the generated ones); every ingredient line has a name, an amount > 0 or none, no unit
+without an amount and no empty fields; every recipe image exists on disk; no step is the
+scaffolder's `TODO`; dictionary units are base units, categories are aisles in
+`shopping::CATEGORY_ORDER`, and no name or alias points at two entries; the `vegetarian` tag
+is never on a recipe with meat or fish, and is required when the dictionary knows every
+ingredient and none is (with an unknown ingredient it is the author's call). Unknown names and
+units that won't add up are reported, not failed.
 
 ## 6. Build, run, deploy
 
@@ -310,15 +351,26 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   plain-text draft (see `src/scaffold.rs`) and run
   `cargo run --bin scaffold -- draft.txt` (`--dry-run` prints, `--force` overwrites). It
   writes `recipes/<id>.json` and a placeholder `images/<id>.svg`, or lists every problem by
-  line (unknown ingredients come with a catalog stub to paste) and writes nothing. It sets
-  the `vegetarian` tag from the ingredients.
+  line and writes nothing; names the dictionary doesn't know and units that won't add up are
+  warnings. It sets the `vegetarian` tag from the ingredients.
+- **Ingredient report:** `cargo run --bin ingredients` — names the dictionary doesn't know
+  (with near matches) and amounts the grocery list can't add up.
 - **Static build:** `trunk build --release` → `dist/`.
 - **Deploy:** push to `main` → `.github/workflows/deploy.yml` builds with
   `--public-url /cooking-rs/` and `APP_BASE_PATH=/cooking-rs` (asset base *and* router base
-  must match), copies `index.html → 404.html` for SPA deep-link fallback, and publishes to
-  GitHub Pages. Requires Pages to be enabled with **Source: GitHub Actions** in the repo
-  settings. The base path is the one value to keep in sync if the repo is renamed or a
+  must match), writes `404.html` (`.github/scripts/spa_fallback.py`: the index plus a redirect
+  for preview deep links) and publishes `dist/` to the root of the `gh-pages` branch, leaving
+  `pr-preview/` alone. Pages serves that branch (**Source: Deploy from a branch → gh-pages,
+  / (root)**). The base path is the one value to keep in sync if the repo is renamed or a
   root/custom-domain page is used (then `/` and `""`).
+- **PR previews:** `.github/workflows/preview.yml` builds every same-repo pull request with
+  `APP_BASE_PATH=/cooking-rs/pr-preview/pr-N` and `APP_PREVIEW=pr-N`, publishes it to
+  `gh-pages/pr-preview/pr-N/` and comments the link (`rossjrw/pr-preview-action`), and
+  removes it when the PR closes. `APP_PREVIEW` (`app::PREVIEW`) namespaces the localStorage
+  keys, skips the service worker (the live app's worker scope covers the preview) and shows
+  "preview · pr-N" in the nav. Pages serves only the site-wide `404.html`, so a deep link in
+  a preview is redirected to the preview's root with `?path=…`, which `main.rs` puts back
+  before the router starts (`app::redirected_path`).
 - **PWA assets:** `manifest.webmanifest`, `sw.js`, and `icons/` are copied into `dist/` via
   `data-trunk` directives in `index.html`; the service worker is network-first with a cache
   fallback and only caches successful same-origin responses. Fonts (Space Grotesk, Space
@@ -373,18 +425,58 @@ ingredient comes from the Meat or Fish aisle (the Diet filter reads the tag).
   `window.confirm`: "Meals only" keeps the extras, "Everything" drops them too; both clear
   the grocery ticks and keep the at-home items.
 
+- **Phase 12 — Recipe editor (form).** A `/new` page ("New" on the recipes list) for
+  people who don't code: name, author, servings, times, cuisine and tag chips; ingredient
+  rows picked from the catalog with an amount and a unit picker that only offers units
+  that convert; new ingredients from a sheet (name, aisle, how it is measured); steps.
+  Missing things are listed in plain words; a complete recipe gets a live preview with the
+  recipe page's own body and a notice if it would replace an existing one. The form
+  survives reloads; "Copy JSON" includes the new catalog lines. "Paste a recipe" fills the
+  form from text copied from a website or a message, and says how many rows still need a
+  pick. (A first version took the scaffolder's text draft; it was too technical and was
+  replaced by the form.)
+- **Phase 13 — Free ingredients, the catalog becomes a dictionary.** With nutrition gone,
+  recipes no longer reference ingredients by key: each line names its ingredient as written
+  (and may carry an `aisle`). `ingredients.json` is an optional dictionary (with `aliases`)
+  that gives known names their aisle, unit conversions and grocery merging; any other name
+  works on its own line. Units are written out (no unit = a count). The editor takes any name
+  and only suggests (no forced pick, no new-ingredient sheet); paste keeps names as written;
+  unknown names and units that won't add up are warnings and a report
+  (`cargo run --bin ingredients`), not failures. The 25 recipes were migrated with an
+  identical grocery list for each (and all together) before and after.
+
+- **Phase 14 — PR previews.** Every pull request is built and published to
+  `/cooking-rs/pr-preview/pr-N/` with its link on the PR, kept apart from the live app (own
+  saved data, no service worker, a "preview" mark); deep links survive a reload. The live
+  site moved from the Pages artifact to the `gh-pages` branch to share it with previews.
+
 ### Next
 Each milestone ships on its own (CI gate green, deployed, checked live).
 
-1. **Live with it.** A week of real planning and one shop on the phone; a fix round
-   follows and re-prioritises the polish below.
+1. **Recipe editor** — an easy way to add and change recipes from the phone, with every
+   change landing as a pull request (recipes stay reviewed JSON in git):
+   - **Edit:** an "Edit" button on the recipe page opens the form filled in
+     (`RecipeForm::from_recipe` exists and is tested).
+   - **Save as a pull request:** "Save" opens a prefilled GitHub issue (the recipe JSON); a
+     plain GitHub Action (no AI, no secrets) writes the files
+     and the placeholder image, runs `cargo test`, then opens a PR that closes the issue,
+     or comments the problems. Runs
+     only for the maintainer's issues or a label; may touch only `recipes/` and
+     `images/`. Nothing merges by itself.
 2. **Grocery polish.** Tap an extra to edit it, finished aisles fold to one line,
    "Clear ticks" for the next shop.
 3. **PWA and offline.** Airplane-mode check of the installed app; self-host the two
    fonts so they work offline; bump the cache.
 
 ### Ideas (discussed, not approved)
-Recorded so the reasoning isn't lost; neither is scheduled or agreed.
+Recorded so the reasoning isn't lost; none is scheduled or agreed.
+
+- **Ingredient tidying skill** (discussed 2026-11-13). Input stays free; consistency is a
+  suggested, reviewable change. A Claude skill (later also an agentic workflow) reads
+  `cargo run --bin ingredients`, and proposes as one PR: aliases for synonyms ("red
+  lentils" → Lentils), new dictionary entries for names several recipes share, aisles for
+  unknown ingredients, unit conversions for amounts that won't add up, and the vegetarian
+  tag where it is now decidable. It prefers aliases (recipes untouched) over renaming lines.
 
 - **Family sync via Cloudflare** (discussed 2026-10-25). Full collaboration without running
   a server: a Cloudflare Worker + one Durable Object per family, in Rust (`workers-rs`)
@@ -407,7 +499,7 @@ Recorded so the reasoning isn't lost; neither is scheduled or agreed.
   - A "New recipe" issue form (name, author, servings, free text or a source link).
   - Applying a `recipe:approved` label (only the maintainer can) runs the Claude Code
     GitHub Action with an `add-recipe` skill in the repo: draft format → `cargo run --bin
-    scaffold` → catalog entries for unknown ingredients → `cargo test` → a PR that closes
+    scaffold` → `cargo test` → a PR that closes
     the issue and lists its assumptions. The maintainer merges; nothing auto-merges.
   - Submitters limited by `author_association` or a `.github/recipe-authors` list; others
     are closed politely.
@@ -433,8 +525,9 @@ Recorded so the reasoning isn't lost; neither is scheduled or agreed.
 "Why is this on the list" is done: the grocery row sheet shows the recipes that need it.
 
 ### Non-goals (for now)
-User accounts, a backend/database, server-side rendering, nutrition tracking, in-app
-recipe editing, and image hosting. The app stays a static, link-shareable SPA.
+User accounts, a backend/database, server-side rendering, nutrition tracking, storing
+recipes anywhere but git (the editor drafts; a reviewed pull request saves), and image
+hosting. The app stays a static, link-shareable SPA.
 
 ---
 

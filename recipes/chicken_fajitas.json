@@ -10,17 +10,17 @@
   "prep_time": 15,
   "cook_time": 15,
   "ingredients": [
-    { "ingredient": "chicken_breast", "amount": 300, "note": "in strips" },
-    { "ingredient": "bell_pepper", "amount": 2, "unit": "pcs", "note": "in strips" },
-    { "ingredient": "red_onion", "amount": 1, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "lime", "amount": 1 },
-    { "ingredient": "cumin", "amount": 3 },
-    { "ingredient": "paprika", "amount": 3 },
-    { "ingredient": "vegetable_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "tortilla", "amount": 4 },
-    { "ingredient": "greek_yogurt", "amount": 50, "optional": true },
-    { "ingredient": "cheddar", "amount": 50, "note": "grated", "optional": true },
-    { "ingredient": "salt" }
+    { "name": "Chicken breast", "amount": 300, "unit": "g", "note": "in strips" },
+    { "name": "Bell pepper", "amount": 2, "unit": "pcs", "note": "in strips" },
+    { "name": "Red onion", "amount": 1, "unit": "pcs", "note": "sliced" },
+    { "name": "Lime", "amount": 1 },
+    { "name": "Ground cumin", "amount": 3, "unit": "g" },
+    { "name": "Smoked paprika", "amount": 3, "unit": "g" },
+    { "name": "Vegetable oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Tortilla", "amount": 4 },
+    { "name": "Greek yogurt", "amount": 50, "unit": "g", "optional": true },
+    { "name": "Cheddar", "amount": 50, "unit": "g", "note": "grated", "optional": true },
+    { "name": "Salt" }
   ],
   "steps": [
     "Toss the chicken with the cumin, paprika, a pinch of salt and half the lime juice.",

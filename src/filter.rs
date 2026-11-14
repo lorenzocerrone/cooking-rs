@@ -19,18 +19,25 @@ pub const VEGETARIAN_TAG: &str = "vegetarian";
 /// Aisles whose ingredients make a recipe not vegetarian.
 pub const MEAT_AISLES: [&str; 2] = ["Meat", "Fish"];
 
-/// The recipe's ingredients that come from a [`MEAT_AISLES`] aisle. The
-/// scaffolder sets [`VEGETARIAN_TAG`] from this and validation checks it.
+/// The recipe's ingredients that come from a [`MEAT_AISLES`] aisle (the
+/// dictionary's, or the line's own for an unknown ingredient). The scaffolder
+/// and the editor set [`VEGETARIAN_TAG`] from this and validation checks it.
 pub fn meat_ingredients<'a>(recipe: &'a Recipe, catalog: &IngredientCatalog) -> Vec<&'a str> {
     recipe
         .ingredients
         .iter()
-        .filter(|i| {
-            catalog
-                .get(&i.ingredient)
-                .is_some_and(|info| MEAT_AISLES.contains(&info.category.as_str()))
-        })
-        .map(|i| i.ingredient.as_str())
+        .filter(|i| MEAT_AISLES.contains(&crate::shopping::aisle(i, catalog).as_str()))
+        .map(|i| i.name.as_str())
+        .collect()
+}
+
+/// The recipe's ingredients the dictionary doesn't know.
+pub fn unknown_ingredients<'a>(recipe: &'a Recipe, catalog: &IngredientCatalog) -> Vec<&'a str> {
+    recipe
+        .ingredients
+        .iter()
+        .filter(|i| catalog.lookup(&i.name).is_none())
+        .map(|i| i.name.as_str())
         .collect()
 }
 

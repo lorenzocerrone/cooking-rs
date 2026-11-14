@@ -5,11 +5,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# Allow the workflow to publish to GitHub Pages.
+# The live site is published to the root of the `gh-pages` branch, which
+# GitHub Pages serves (Settings → Pages → Source: Deploy from a branch →
+# gh-pages, / (root)). Pull-request previews live beside it in pr-preview/
+# (see preview.yml) and are left untouched here.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 # One deploy at a time; don't cancel an in-progress one.
 concurrency:
@@ -17,7 +18,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,22 +46,15 @@ jobs:
         run: trunk build --release --public-url /cooking-rs/
 
       # SPA fallback: GitHub Pages serves 404.html for unknown paths, so a hard
-      # refresh of /cooking-rs/planner loads the app instead of a 404.
+      # refresh of /cooking-rs/planner loads the app instead of a 404 (and a deep
+      # link into a PR preview goes back to that preview).
       - name: Add SPA fallback
-        run: cp dist/index.html dist/404.html
+        run: python3 .github/scripts/spa_fallback.py dist
 
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Publish to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: dist
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          folder: dist
+          branch: gh-pages
+          clean-exclude: pr-preview/
+          force: false

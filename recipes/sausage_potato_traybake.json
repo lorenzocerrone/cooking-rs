@@ -10,14 +10,14 @@
   "prep_time": 10,
   "cook_time": 35,
   "ingredients": [
-    { "ingredient": "sausage", "amount": 4 },
-    { "ingredient": "potato", "amount": 500, "note": "in chunks" },
-    { "ingredient": "red_onion", "amount": 1, "unit": "pcs", "note": "in wedges" },
-    { "ingredient": "bell_pepper", "amount": 1, "unit": "pcs", "note": "in chunks" },
-    { "ingredient": "rosemary", "amount": 2, "unit": "sprigs" },
-    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "salt" },
-    { "ingredient": "black_pepper" }
+    { "name": "Sausages", "amount": 4 },
+    { "name": "Potatoes", "amount": 500, "unit": "g", "note": "in chunks" },
+    { "name": "Red onion", "amount": 1, "unit": "pcs", "note": "in wedges" },
+    { "name": "Bell pepper", "amount": 1, "unit": "pcs", "note": "in chunks" },
+    { "name": "Rosemary", "amount": 2, "unit": "sprigs" },
+    { "name": "Olive oil", "amount": 2, "unit": "tbsp" },
+    { "name": "Salt" },
+    { "name": "Black pepper" }
   ],
   "steps": [
     "Heat the oven to 220 °C.",

@@ -429,9 +429,9 @@ fn ExtrasEditor(
                     let label = match extra {
                         Extra::Catalog(item) => catalog.with_value(|c| {
                             let name = c
-                                .get(&item.ingredient)
-                                .map(|x| x.name.clone())
-                                .unwrap_or_else(|| item.ingredient.clone());
+                                .lookup(&item.name)
+                                .map(|(_, x)| x.name.clone())
+                                .unwrap_or_else(|| item.name.clone());
                             match item.amount {
                                 Some(_) => format!("{name} {}", format_ingredient_amount(item, c)),
                                 None => name,

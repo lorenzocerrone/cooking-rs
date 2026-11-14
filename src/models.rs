@@ -9,9 +9,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::date::Date;
 use crate::quantity::{CountSpec, Unit};
 
-/// A single recipe, as authored in `recipes/*.json`. Ingredients reference the
-/// central catalog ([`IngredientCatalog`]) by key rather than embedding their own
-/// names/units, so amounts can be summed across recipes.
+/// A single recipe, as authored in `recipes/*.json`. It is self-contained:
+/// each ingredient line names its ingredient as written. The ingredient
+/// dictionary ([`IngredientCatalog`]) is looked up by that name to sum
+/// amounts across recipes, convert units and pick the aisle; a name it doesn't
+/// know still works, on its own grocery line.
 ///
 /// Everything beyond the original core fields is optional (`#[serde(default)]`) so
 /// older recipe files keep parsing unchanged.
@@ -55,14 +57,15 @@ pub struct Recipe {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct RecipeIngredient {
-    /// Key into the [`IngredientCatalog`].
-    pub ingredient: String,
+    /// The ingredient as written ("Lentils", "star anise"). Matched against the
+    /// dictionary by [`IngredientCatalog::lookup`]; older data used a dictionary
+    /// key here, which still matches.
+    #[serde(alias = "ingredient")]
+    pub name: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount: Option<f64>,
-    /// Unit as written in the recipe: any [`Unit`] spelling, or the ingredient's
-    /// piece label ("clove", "can"). `None` means the catalog's shopping unit.
-    /// Kept as text because resolving labels needs the catalog
-    /// (see [`crate::quantity::resolve_unit`]).
+    /// Unit as written: any [`Unit`] spelling, a piece word ("clove", "can",
+    /// "bunch"), or nothing for a plain count ("2" eggs). See [`measure`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unit: Option<String>,
     /// Preparation note shown next to the name ("finely chopped").
@@ -71,23 +74,57 @@ pub struct RecipeIngredient {
     /// Optional ingredients are listed but flagged, in the recipe and the list.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub optional: bool,
+    /// Grocery aisle for an ingredient the dictionary doesn't know (it wins
+    /// otherwise). Missing: "Other".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub aisle: Option<String>,
 }
 
 impl RecipeIngredient {
-    /// An ingredient in its catalog unit with no note.
-    pub fn new(ingredient: String, amount: Option<f64>) -> Self {
+    /// An ingredient with an amount and nothing else.
+    pub fn new(name: impl Into<String>, amount: Option<f64>) -> Self {
         Self {
-            ingredient,
+            name: name.into(),
             amount,
             unit: None,
             note: None,
             optional: false,
+            aisle: None,
         }
     }
 }
 
-/// One entry in the ingredient catalog (`ingredients.json`). The map key is the
-/// lookup id used by [`RecipeIngredient::ingredient`].
+/// How a line's amount is measured.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Measure {
+    /// A unit the app can convert (a piece label of a known ingredient is
+    /// [`Unit::Piece`]).
+    Unit(Unit),
+    /// A piece word the app can't convert ("bunch"), kept as written.
+    Label(String),
+}
+
+/// Resolve a line's unit. No unit is a plain count ("2" eggs), whatever the
+/// dictionary says, so a recipe means the same thing as the dictionary grows.
+pub fn measure(item: &RecipeIngredient, known: Option<&CatalogIngredient>) -> Measure {
+    let count = known.and_then(|k| k.count.as_ref());
+    match item
+        .unit
+        .as_deref()
+        .map(str::trim)
+        .filter(|u| !u.is_empty())
+    {
+        None => Measure::Unit(Unit::Piece),
+        Some(u) => match Unit::parse(u) {
+            Some(unit) => Measure::Unit(unit),
+            None if count.is_some_and(|c| c.matches_label(u)) => Measure::Unit(Unit::Piece),
+            None => Measure::Label(u.to_string()),
+        },
+    }
+}
+
+/// One entry in the ingredient dictionary (`ingredients.json`), keyed by a
+/// stable id (also the grocery tick identity).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct CatalogIngredient {
@@ -100,6 +137,9 @@ pub struct CatalogIngredient {
     /// How the ingredient is counted in pieces, if recipes may do so.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub count: Option<CountSpec>,
+    /// Other names recipes use for it ("spring onion" for scallion).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub aliases: Vec<String>,
 }
 
 /// The full ingredient catalog: `key -> entry`.
@@ -110,6 +150,45 @@ impl IngredientCatalog {
     pub fn get(&self, key: &str) -> Option<&CatalogIngredient> {
         self.0.get(key)
     }
+
+    /// The dictionary entry for a name as written: its key, display name or an
+    /// alias, ignoring case and extra spaces, also trying singular and plural
+    /// forms ("tomatoes" → tomato). Exact otherwise: what it doesn't know stays
+    /// unknown rather than being guessed.
+    pub fn lookup(&self, name: &str) -> Option<(&str, &CatalogIngredient)> {
+        let name = normalize_name(name);
+        if name.is_empty() {
+            return None;
+        }
+        let mut candidates = vec![name.clone()];
+        if let Some(s) = name.strip_suffix("es") {
+            candidates.push(s.to_string());
+        }
+        if let Some(s) = name.strip_suffix('s') {
+            candidates.push(s.to_string());
+        }
+        candidates.push(format!("{name}s"));
+        candidates.iter().find_map(|c| {
+            let key = c.replace(' ', "_");
+            self.0
+                .get_key_value(&key)
+                .or_else(|| {
+                    self.0.iter().find(|(_, i)| {
+                        normalize_name(&i.name) == *c
+                            || i.aliases.iter().any(|a| normalize_name(a) == *c)
+                    })
+                })
+                .map(|(k, i)| (k.as_str(), i))
+        })
+    }
+}
+
+/// Lowercase, single spaces: how names are compared.
+pub fn normalize_name(name: &str) -> String {
+    name.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .to_lowercase()
 }
 
 /// A chosen meal: a recipe id plus an optional target servings count. `servings:
@@ -230,8 +309,11 @@ impl<'de> Deserialize<'de> for DayPlan {
 
 /// A grocery item added by hand, outside any recipe.
 ///
-/// Untagged on the wire: a catalog item is exactly a [`RecipeIngredient`] (the
-/// pre-existing format, keyed by `ingredient`), a custom item is `{name, quantity}`.
+/// Untagged on the wire: a catalog item is exactly a [`RecipeIngredient`] (its
+/// `name` was once `ingredient`, still accepted), a custom item is `{name, quantity}`.
+/// A custom item always carries `quantity` (possibly `null`), which a catalog
+/// item never has; older links with a bare `{name}` read as a catalog item of
+/// that name, which lands on the same grocery line.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum Extra {
@@ -240,7 +322,9 @@ pub enum Extra {
     /// Anything not in the catalog. The quantity is free text, shown as typed.
     Custom {
         name: String,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        /// Always written (`null` when empty), so a custom item never reads
+        /// back as a catalog item.
+        #[serde(default)]
         quantity: Option<String>,
     },
 }
@@ -590,10 +674,8 @@ mod tests {
     #[test]
     fn extras_are_omitted_when_empty_and_both_kinds_round_trip() {
         let mut plan = MealPlan::default();
-        plan.extras.push(Extra::Catalog(RecipeIngredient::new(
-            "milk".into(),
-            Some(1000.0),
-        )));
+        plan.extras
+            .push(Extra::Catalog(RecipeIngredient::new("milk", Some(1000.0))));
         plan.extras.push(Extra::Custom {
             name: "Bread".into(),
             quantity: Some("1 loaf".into()),
@@ -604,21 +686,24 @@ mod tests {
         });
         let json = serde_json::to_string(&plan).unwrap();
         assert!(
-            json.contains(r#"{"ingredient":"milk","amount":1000.0}"#),
+            json.contains(r#"{"name":"milk","amount":1000.0}"#),
             "{json}"
         );
         assert!(
             json.contains(r#"{"name":"Bread","quantity":"1 loaf"}"#),
             "{json}"
         );
-        assert!(json.contains(r#"{"name":"Candles"}"#), "{json}");
+        assert!(
+            json.contains(r#"{"name":"Candles","quantity":null}"#),
+            "{json}"
+        );
         assert_eq!(decode(&json), plan);
 
         // The pre-`Extra` format (a bare RecipeIngredient list) still decodes.
         let legacy = decode(r#"{"days":[],"extras":[{"ingredient":"milk"}]}"#);
         assert_eq!(
             legacy.extras,
-            vec![Extra::Catalog(RecipeIngredient::new("milk".into(), None))]
+            vec![Extra::Catalog(RecipeIngredient::new("milk", None))]
         );
     }
 

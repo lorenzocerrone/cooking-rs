@@ -10,13 +10,13 @@
   "prep_time": 10,
   "cook_time": 30,
   "ingredients": [
-    { "ingredient": "chopped_tomatoes", "amount": 2, "unit": "cans" },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "diced" },
-    { "ingredient": "garlic", "amount": 4, "unit": "cloves" },
-    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "vegetable_broth", "amount": 500 },
-    { "ingredient": "salt" },
-    { "ingredient": "black_pepper" }
+    { "name": "Chopped tomatoes", "amount": 2, "unit": "cans" },
+    { "name": "Onion", "amount": 1, "unit": "pcs", "note": "diced" },
+    { "name": "Garlic", "amount": 4, "unit": "cloves" },
+    { "name": "Olive oil", "amount": 2, "unit": "tbsp" },
+    { "name": "Vegetable broth", "amount": 500, "unit": "ml" },
+    { "name": "Salt" },
+    { "name": "Black pepper" }
   ],
   "steps": [
     "Soften the chopped onion and garlic in olive oil.",

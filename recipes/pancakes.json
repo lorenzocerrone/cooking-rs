@@ -10,12 +10,12 @@
   "prep_time": 5,
   "cook_time": 10,
   "ingredients": [
-    { "ingredient": "flour", "amount": 200 },
-    { "ingredient": "milk", "amount": 300 },
-    { "ingredient": "egg", "amount": 1 },
-    { "ingredient": "butter", "amount": 20 },
-    { "ingredient": "sugar", "amount": 20 },
-    { "ingredient": "baking_powder", "amount": 10 }
+    { "name": "Flour", "amount": 200, "unit": "g" },
+    { "name": "Milk", "amount": 300, "unit": "ml" },
+    { "name": "Egg", "amount": 1 },
+    { "name": "Butter", "amount": 20, "unit": "g" },
+    { "name": "Sugar", "amount": 20, "unit": "g" },
+    { "name": "Baking powder", "amount": 10, "unit": "g" }
   ],
   "steps": [
     "Whisk the flour, sugar, and baking powder together.",

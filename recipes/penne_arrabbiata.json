@@ -10,14 +10,14 @@
   "prep_time": 5,
   "cook_time": 20,
   "ingredients": [
-    { "ingredient": "short_pasta", "amount": 200, "note": "penne" },
-    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
-    { "ingredient": "garlic", "amount": 3, "unit": "cloves", "note": "thinly sliced" },
-    { "ingredient": "chili_flakes", "amount": 2 },
-    { "ingredient": "olive_oil", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "parmesan", "amount": 30, "note": "grated", "optional": true },
-    { "ingredient": "basil", "optional": true },
-    { "ingredient": "salt" }
+    { "name": "Short pasta", "amount": 200, "unit": "g", "note": "penne" },
+    { "name": "Chopped tomatoes", "amount": 1, "unit": "can" },
+    { "name": "Garlic", "amount": 3, "unit": "cloves", "note": "thinly sliced" },
+    { "name": "Chili flakes", "amount": 2, "unit": "g" },
+    { "name": "Olive oil", "amount": 2, "unit": "tbsp" },
+    { "name": "Parmesan", "amount": 30, "unit": "g", "note": "grated", "optional": true },
+    { "name": "Basil", "optional": true },
+    { "name": "Salt" }
   ],
   "steps": [
     "Put a large pot of salted water on to boil.",

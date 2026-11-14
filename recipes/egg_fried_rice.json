@@ -10,14 +10,14 @@
   "prep_time": 10,
   "cook_time": 10,
   "ingredients": [
-    { "ingredient": "rice", "amount": 150, "note": "cooked and cooled (ideally a day old)" },
-    { "ingredient": "egg", "amount": 3, "note": "beaten" },
-    { "ingredient": "peas", "amount": 150, "note": "frozen" },
-    { "ingredient": "scallion", "amount": 3, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
-    { "ingredient": "soy_sauce", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "sesame_oil", "amount": 1, "unit": "tsp" },
-    { "ingredient": "vegetable_oil", "amount": 1, "unit": "tbsp" }
+    { "name": "Rice", "amount": 150, "unit": "g", "note": "cooked and cooled (ideally a day old)" },
+    { "name": "Egg", "amount": 3, "note": "beaten" },
+    { "name": "Frozen peas", "amount": 150, "unit": "g", "note": "frozen" },
+    { "name": "Scallion", "amount": 3, "unit": "pcs", "note": "sliced" },
+    { "name": "Garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "name": "Soy sauce", "amount": 2, "unit": "tbsp" },
+    { "name": "Sesame oil", "amount": 1, "unit": "tsp" },
+    { "name": "Vegetable oil", "amount": 1, "unit": "tbsp" }
   ],
   "steps": [
     "Heat the vegetable oil in a wok or large pan until very hot. Scramble the eggs softly and set aside.",

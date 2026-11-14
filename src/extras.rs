@@ -3,7 +3,7 @@
 //! to store. No Leptos types.
 
 use crate::models::{CatalogIngredient, Extra, IngredientCatalog, RecipeIngredient};
-use crate::quantity::resolve_unit;
+use crate::quantity::{resolve_unit, Unit};
 
 /// A typed extra, split into the item name and an optional quantity text.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -68,15 +68,19 @@ pub fn suggest(catalog: &IngredientCatalog, name: &str, max: usize) -> Vec<Sugge
     let mut prefix = Vec::new();
     let mut inner = Vec::new();
     for (key, info) in &catalog.0 {
-        let lower = info.name.to_lowercase();
+        // The name or an alias ("courgette" finds Zucchini).
+        let names: Vec<String> = std::iter::once(&info.name)
+            .chain(&info.aliases)
+            .map(|n| n.to_lowercase())
+            .collect();
         let s = Suggestion {
             key: key.clone(),
             name: info.name.clone(),
             category: info.category.clone(),
         };
-        if lower.starts_with(&needle) {
+        if names.iter().any(|n| n.starts_with(&needle)) {
             prefix.push(s);
-        } else if lower.contains(&needle) {
+        } else if names.iter().any(|n| n.contains(&needle)) {
             inner.push(s);
         }
     }
@@ -92,7 +96,7 @@ pub fn suggest(catalog: &IngredientCatalog, name: &str, max: usize) -> Vec<Sugge
 pub fn to_extra(parsed: &ParsedExtra, pick: Option<(&str, &CatalogIngredient)>) -> Extra {
     if let Some((key, info)) = pick {
         match parsed.quantity.as_deref() {
-            None => return Extra::Catalog(RecipeIngredient::new(key.to_string(), None)),
+            None => return Extra::Catalog(RecipeIngredient::new(key, None)),
             Some(q) => {
                 let mut parts = q.split_whitespace();
                 let amount = parts.next().and_then(parse_number);
@@ -102,12 +106,14 @@ pub fn to_extra(parsed: &ParsedExtra, pick: Option<(&str, &CatalogIngredient)>) 
                 if let (Some(amount), true) = (amount, resolves) {
                     // The unit text is kept as typed ("loaves"); it resolved, so
                     // the list can convert it.
+                    // No unit means the shopping unit ("flour 500" is 500 g);
+                    // written out, since a bare number counts pieces.
+                    let unit = unit
+                        .map(str::to_string)
+                        .or_else(|| (info.unit != Unit::Piece).then(|| info.unit.as_str().into()));
                     return Extra::Catalog(RecipeIngredient {
-                        ingredient: key.to_string(),
-                        amount: Some(amount),
-                        unit: unit.map(str::to_string),
-                        note: None,
-                        optional: false,
+                        unit,
+                        ..RecipeIngredient::new(key, Some(amount))
                     });
                 }
                 return Extra::Custom {
@@ -168,6 +174,7 @@ mod tests {
                 unit,
                 category: category.into(),
                 count,
+                aliases: Vec::new(),
             };
         m.insert("milk".into(), entry("Milk", Unit::Ml, "Dairy & Eggs", None));
         m.insert(
@@ -215,33 +222,38 @@ mod tests {
         assert_eq!(
             to_extra(&parsed("milk", Some("1 l")), Some(milk)),
             Extra::Catalog(RecipeIngredient {
-                ingredient: "milk".into(),
+                name: "milk".into(),
                 amount: Some(1.0),
                 unit: Some("l".into()),
                 note: None,
                 optional: false,
+                aisle: None,
             })
         );
-        // No unit: the catalog's shopping unit.
+        // No unit: the catalog's shopping unit, written out.
         assert_eq!(
             to_extra(&parsed("flour", Some("500")), Some(flour)),
-            Extra::Catalog(RecipeIngredient::new("flour".into(), Some(500.0)))
+            Extra::Catalog(RecipeIngredient {
+                unit: Some("g".into()),
+                ..RecipeIngredient::new("flour", Some(500.0))
+            })
         );
         // Piece labels resolve too.
         assert_eq!(
             to_extra(&parsed("bread", Some("2 loaves")), Some(bread)),
             Extra::Catalog(RecipeIngredient {
-                ingredient: "bread".into(),
+                name: "bread".into(),
                 amount: Some(2.0),
                 unit: Some("loaves".into()),
                 note: None,
                 optional: false,
+                aisle: None,
             })
         );
         // No quantity at all: a "to taste"-style catalog line.
         assert_eq!(
             to_extra(&parsed("milk", None), Some(milk)),
-            Extra::Catalog(RecipeIngredient::new("milk".into(), None))
+            Extra::Catalog(RecipeIngredient::new("milk", None))
         );
         // A unit the ingredient can't convert keeps the text, under the catalog name.
         assert_eq!(

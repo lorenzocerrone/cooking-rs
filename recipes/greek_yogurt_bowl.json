@@ -10,10 +10,10 @@
   "prep_time": 5,
   "cook_time": 0,
   "ingredients": [
-    { "ingredient": "greek_yogurt", "amount": 200 },
-    { "ingredient": "oats", "amount": 40 },
-    { "ingredient": "banana", "amount": 1 },
-    { "ingredient": "honey", "amount": 15 }
+    { "name": "Greek yogurt", "amount": 200, "unit": "g" },
+    { "name": "Rolled oats", "amount": 40, "unit": "g" },
+    { "name": "Banana", "amount": 1 },
+    { "name": "Honey", "amount": 15, "unit": "g" }
   ],
   "steps": [
     "Spoon the yogurt into a bowl.",

@@ -10,17 +10,17 @@
   "prep_time": 10,
   "cook_time": 25,
   "ingredients": [
-    { "ingredient": "chickpeas", "amount": 2, "unit": "cans", "note": "drained" },
-    { "ingredient": "chopped_tomatoes", "amount": 1, "unit": "can" },
-    { "ingredient": "coconut_milk", "amount": 1, "unit": "can" },
-    { "ingredient": "spinach", "amount": 200 },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
-    { "ingredient": "garlic", "amount": 3, "unit": "cloves", "note": "crushed" },
-    { "ingredient": "ginger", "amount": 1, "unit": "thumb", "note": "grated" },
-    { "ingredient": "curry_powder", "amount": 15 },
-    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "rice", "amount": 240 },
-    { "ingredient": "salt" }
+    { "name": "Chickpeas", "amount": 2, "unit": "cans", "note": "drained" },
+    { "name": "Chopped tomatoes", "amount": 1, "unit": "can" },
+    { "name": "Coconut milk", "amount": 1, "unit": "can" },
+    { "name": "Spinach", "amount": 200, "unit": "g" },
+    { "name": "Onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "name": "Garlic", "amount": 3, "unit": "cloves", "note": "crushed" },
+    { "name": "Ginger", "amount": 1, "unit": "thumb", "note": "grated" },
+    { "name": "Curry powder", "amount": 15, "unit": "g" },
+    { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Rice", "amount": 240, "unit": "g" },
+    { "name": "Salt" }
   ],
   "steps": [
     "Start the rice.",

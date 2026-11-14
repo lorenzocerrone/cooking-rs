@@ -2,7 +2,7 @@ use leptos::prelude::*;
 use leptos_router::components::A;
 
 use crate::app::{href, use_app_data};
-use crate::components::RecipeFilters;
+use crate::components::{IconPlus, RecipeFilters};
 use crate::filter::{filter, RecipeQuery};
 use crate::format::format_total_time;
 use crate::models::Recipe;
@@ -36,8 +36,13 @@ fn RecipeList(recipes: Vec<Recipe>) -> impl IntoView {
 
     view! {
         <header class="page-head">
-            <h1>"Recipes"</h1>
-            <span class="mono muted">{move || filtered.with(|l| l.len())}</span>
+            <h1>
+                "Recipes" <span class="mono muted count">{move || filtered.with(|l| l.len())}</span>
+            </h1>
+            <A href=href("/new") attr:class="btn">
+                <IconPlus />
+                "New"
+            </A>
         </header>
         <RecipeFilters query=query recipes=recipes />
         <ul class="recipe-list">

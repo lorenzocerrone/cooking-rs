@@ -5,8 +5,8 @@
 //! *says* is decoupled from how the logic computes it and how the view renders it.
 
 use crate::date::{Date, MONTH_SHORT, WEEKDAY_SHORT};
-use crate::models::{IngredientCatalog, Recipe, RecipeIngredient};
-use crate::quantity::{resolve_unit, CountSpec, Dimension, Unit};
+use crate::models::{measure, IngredientCatalog, Measure, Recipe, RecipeIngredient};
+use crate::quantity::{CountSpec, Dimension, Unit};
 use crate::shopping::{ShoppingCategory, ShoppingLine, Subtotal};
 
 /// A quantity as authored in a recipe: the number trimmed to at most two
@@ -23,8 +23,8 @@ pub fn format_quantity(amount: f64, unit: Unit, count: Option<&CountSpec>) -> St
     }
 }
 
-/// The amount column for one recipe ingredient, resolved against the catalog.
-/// `None` amount renders "to taste".
+/// The amount column for one recipe ingredient, resolved against the
+/// dictionary. `None` amount renders "to taste".
 pub fn format_ingredient_amount(item: &RecipeIngredient, catalog: &IngredientCatalog) -> String {
     format_ingredient_amount_scaled(item, catalog, 1.0)
 }
@@ -39,16 +39,26 @@ pub fn format_ingredient_amount_scaled(
     let Some(amount) = item.amount.map(|a| a * factor) else {
         return "to taste".to_string();
     };
-    let info = catalog.get(&item.ingredient);
-    let unit = match info {
-        Some(i) => resolve_unit(item.unit.as_deref(), i.unit, i.count.as_ref()).unwrap_or(i.unit),
-        None => item
-            .unit
-            .as_deref()
-            .and_then(Unit::parse)
-            .unwrap_or(Unit::Piece),
+    let info = catalog.lookup(&item.name).map(|(_, i)| i);
+    match measure(item, info) {
+        Measure::Unit(unit) => format_quantity(amount, unit, info.and_then(|i| i.count.as_ref())),
+        Measure::Label(word) => format_labelled(amount, &word),
+    }
+}
+
+/// An amount in a piece word the app can't convert: "1 bunch", "2 bunches".
+pub fn format_labelled(amount: f64, word: &str) -> String {
+    let num = trim_decimals(amount, 2);
+    let one = (amount - 1.0).abs() < 1e-9;
+    let word = word.trim();
+    let plural = if one || word.ends_with('s') {
+        word.to_string()
+    } else if ["ch", "sh", "x", "z"].iter().any(|e| word.ends_with(e)) {
+        format!("{word}es")
+    } else {
+        format!("{word}s")
     };
-    format_quantity(amount, unit, info.and_then(|i| i.count.as_ref()))
+    format!("{num} {plural}")
 }
 
 /// One summed sub-total for the grocery list, in shop-friendly units:
@@ -74,15 +84,13 @@ pub fn format_subtotal(subtotal: &Subtotal, count: Option<&CountSpec>, mixed: bo
 /// The quantity text for a whole shopping line: sub-totals joined with " + ",
 /// then "to taste" if any contribution was amount-less, then "(optional)".
 pub fn format_line_quantity(line: &ShoppingLine) -> String {
-    if !line.custom_quantities.is_empty() {
-        return line.custom_quantities.join(" + ");
-    }
-    let mixed = line.subtotals.len() > 1;
+    let mixed = line.subtotals.len() + line.custom_quantities.len() > 1;
     let mut parts: Vec<String> = line
         .subtotals
         .iter()
         .map(|s| format_subtotal(s, line.count.as_ref(), mixed))
         .collect();
+    parts.extend(line.custom_quantities.iter().cloned());
     if line.to_taste {
         parts.push("to taste".to_string());
     }
@@ -228,6 +236,7 @@ mod tests {
                 unit: Unit::G,
                 category: "Produce".into(),
                 count: Some(clove()),
+                aliases: Vec::new(),
             },
         );
         m.insert(
@@ -237,6 +246,7 @@ mod tests {
                 unit: Unit::Piece,
                 category: "Dairy & Eggs".into(),
                 count: None,
+                aliases: Vec::new(),
             },
         );
         m.insert(
@@ -246,6 +256,7 @@ mod tests {
                 unit: Unit::Ml,
                 category: "Spices & Oils".into(),
                 count: None,
+                aliases: Vec::new(),
             },
         );
         IngredientCatalog(m)
@@ -286,18 +297,19 @@ mod tests {
     fn ingredient_amount_resolves_against_catalog() {
         let cat = catalog();
         let item = |key: &str, amount: Option<f64>, unit: Option<&str>| RecipeIngredient {
-            ingredient: key.into(),
+            name: key.into(),
             amount,
             unit: unit.map(Into::into),
             note: None,
             optional: false,
+            aisle: None,
         };
         assert_eq!(
             format_ingredient_amount(&item("garlic", Some(3.0), Some("cloves")), &cat),
             "3 cloves"
         );
         assert_eq!(
-            format_ingredient_amount(&item("garlic", Some(10.0), None), &cat),
+            format_ingredient_amount(&item("garlic", Some(10.0), Some("g")), &cat),
             "10 g"
         );
         assert_eq!(
@@ -319,7 +331,7 @@ mod tests {
         );
         assert_eq!(
             format_ingredient_amount(&item("garlic", Some(1.0), Some("bogus")), &cat),
-            "1 g"
+            "1 bogus"
         );
     }
 
@@ -377,11 +389,12 @@ mod tests {
     fn scaled_amounts_follow_the_servings_factor() {
         let cat = catalog();
         let garlic = RecipeIngredient {
-            ingredient: "garlic".into(),
+            name: "garlic".into(),
             amount: Some(3.0),
             unit: Some("cloves".into()),
             note: None,
             optional: false,
+            aisle: None,
         };
         assert_eq!(
             format_ingredient_amount_scaled(&garlic, &cat, 1.5),
@@ -391,7 +404,7 @@ mod tests {
             format_ingredient_amount_scaled(&garlic, &cat, 1.0 / 3.0),
             "1 clove"
         );
-        let salt = RecipeIngredient::new("salt".into(), None);
+        let salt = RecipeIngredient::new("salt", None);
         assert_eq!(
             format_ingredient_amount_scaled(&salt, &cat, 2.0),
             "to taste"

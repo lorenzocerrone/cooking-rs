@@ -10,17 +10,17 @@
   "prep_time": 10,
   "cook_time": 10,
   "ingredients": [
-    { "ingredient": "egg_noodles", "amount": 200 },
-    { "ingredient": "peanut_butter", "amount": 40 },
-    { "ingredient": "soy_sauce", "amount": 2, "unit": "tbsp" },
-    { "ingredient": "sesame_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "honey", "amount": 15 },
-    { "ingredient": "lime", "amount": 1, "note": "juiced" },
-    { "ingredient": "garlic", "amount": 1, "unit": "clove", "note": "crushed" },
-    { "ingredient": "cucumber", "amount": 0.5, "unit": "pcs", "note": "in matchsticks" },
-    { "ingredient": "scallion", "amount": 2, "unit": "pcs", "note": "sliced" },
-    { "ingredient": "tofu", "amount": 200, "note": "cubed and fried", "optional": true },
-    { "ingredient": "chili_flakes", "optional": true }
+    { "name": "Egg noodles", "amount": 200, "unit": "g" },
+    { "name": "Peanut butter", "amount": 40, "unit": "g" },
+    { "name": "Soy sauce", "amount": 2, "unit": "tbsp" },
+    { "name": "Sesame oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Honey", "amount": 15, "unit": "g" },
+    { "name": "Lime", "amount": 1, "note": "juiced" },
+    { "name": "Garlic", "amount": 1, "unit": "clove", "note": "crushed" },
+    { "name": "Cucumber", "amount": 0.5, "unit": "pcs", "note": "in matchsticks" },
+    { "name": "Scallion", "amount": 2, "unit": "pcs", "note": "sliced" },
+    { "name": "Tofu", "amount": 200, "unit": "g", "note": "cubed and fried", "optional": true },
+    { "name": "Chili flakes", "optional": true }
   ],
   "steps": [
     "Cook the noodles, then rinse them under cold water.",

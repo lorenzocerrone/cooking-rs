@@ -10,16 +10,16 @@
   "prep_time": 10,
   "cook_time": 30,
   "ingredients": [
-    { "ingredient": "arborio_rice", "amount": 160 },
-    { "ingredient": "mushrooms", "amount": 250, "note": "sliced" },
-    { "ingredient": "onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
-    { "ingredient": "garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
-    { "ingredient": "vegetable_broth", "amount": 750, "note": "kept hot" },
-    { "ingredient": "butter", "amount": 30 },
-    { "ingredient": "parmesan", "amount": 40, "note": "grated" },
-    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "salt" },
-    { "ingredient": "black_pepper" }
+    { "name": "Arborio rice", "amount": 160, "unit": "g" },
+    { "name": "Mushrooms", "amount": 250, "unit": "g", "note": "sliced" },
+    { "name": "Onion", "amount": 1, "unit": "pcs", "note": "finely chopped" },
+    { "name": "Garlic", "amount": 2, "unit": "cloves", "note": "crushed" },
+    { "name": "Vegetable broth", "amount": 750, "unit": "ml", "note": "kept hot" },
+    { "name": "Butter", "amount": 30, "unit": "g" },
+    { "name": "Parmesan", "amount": 40, "unit": "g", "note": "grated" },
+    { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Salt" },
+    { "name": "Black pepper" }
   ],
   "steps": [
     "Brown the mushrooms in the olive oil in a hot pan, season and set aside.",

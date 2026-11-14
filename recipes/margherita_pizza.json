@@ -10,12 +10,12 @@
   "prep_time": 20,
   "cook_time": 12,
   "ingredients": [
-    { "ingredient": "pizza_dough", "amount": 400 },
-    { "ingredient": "tomato", "amount": 200 },
-    { "ingredient": "mozzarella", "amount": 150 },
-    { "ingredient": "basil", "amount": 10 },
-    { "ingredient": "olive_oil", "amount": 1, "unit": "tbsp" },
-    { "ingredient": "salt" }
+    { "name": "Pizza dough", "amount": 400, "unit": "g" },
+    { "name": "Tomato", "amount": 200, "unit": "g" },
+    { "name": "Mozzarella", "amount": 150, "unit": "g" },
+    { "name": "Basil", "amount": 10, "unit": "g" },
+    { "name": "Olive oil", "amount": 1, "unit": "tbsp" },
+    { "name": "Salt" }
   ],
   "steps": [
     "Stretch the dough onto a floured tray.",

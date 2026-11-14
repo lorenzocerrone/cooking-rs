@@ -10,10 +10,10 @@
   "prep_time": 2,
   "cook_time": 5,
   "ingredients": [
-    { "ingredient": "egg", "amount": 3 },
-    { "ingredient": "butter", "amount": 15 },
-    { "ingredient": "chives", "amount": 5, "optional": true },
-    { "ingredient": "salt" }
+    { "name": "Egg", "amount": 3 },
+    { "name": "Butter", "amount": 15, "unit": "g" },
+    { "name": "Chives", "amount": 5, "unit": "g", "optional": true },
+    { "name": "Salt" }
   ],
   "steps": [
     "Beat the eggs with a pinch of salt.",

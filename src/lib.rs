@@ -4,14 +4,17 @@
 pub mod app;
 pub mod components;
 pub mod date;
+pub mod editor;
 pub mod extras;
 pub mod filter;
 pub mod format;
 pub mod models;
 pub mod pages;
+pub mod paste;
 pub mod pwa;
 pub mod quantity;
 pub mod recipes;
+pub mod report;
 pub mod scaffold;
 pub mod shopping;
 pub mod state;
