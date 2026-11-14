@@ -1,5 +1,10 @@
 # cooking-rs
 
+> **Status: proof of concept, superseded.** This Rust/Leptos app proved the idea and is
+> being rewritten in TypeScript as **menu.lock** (repo `menu-lock`). The full brief for
+> the rewrite is in [`REWRITE_PLAN.md`](REWRITE_PLAN.md). This repo stays as the
+> reference implementation until menu.lock reaches parity, then its site redirects there.
+
 A small, statically-buildable web app for organizing recipes, planning the coming
 days' meals, and getting the grocery list for it. Written in Rust with
 [Leptos](https://leptos.dev) (CSR) and built with [Trunk](https://trunkrs.dev).

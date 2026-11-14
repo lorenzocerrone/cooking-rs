@@ -1,5 +1,7 @@
 # Architecture & Roadmap
 
+> Proof of concept, superseded by the menu.lock rewrite: see [`REWRITE_PLAN.md`](REWRITE_PLAN.md).
+
 `cooking-rs` is a fully static, single-page web app for organizing recipes,
 planning the coming days' meals, and producing the grocery list for it. It has **no
 backend and no database**: recipe data lives in JSON files embedded into the
