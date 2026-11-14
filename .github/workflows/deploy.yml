@@ -5,10 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The live site is published to the root of the `gh-pages` branch, which
-# GitHub Pages serves (Settings → Pages → Source: Deploy from a branch →
-# gh-pages, / (root)). Pull-request previews live beside it in pr-preview/
-# (see preview.yml) and are left untouched here.
+# The live site (now a redirect to menu.lock) is published to the root of the
+# `gh-pages` branch, which GitHub Pages serves. Pull-request previews live
+# beside it in pr-preview/ (see preview.yml) and are left untouched here.
 permissions:
   contents: write
 
@@ -23,33 +22,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust (wasm target)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
+      # cooking-rs moved to menu.lock (https://github.com/lorenzocerrone/menu-lock).
+      # The site is now a redirect: every old address, with its plan, goes to the
+      # same page of the new app, and a small service worker removes the old
+      # app's worker from phones that installed it. See redirect/.
+      - name: Check the redirect's address mapping
+        run: node redirect/test.mjs
 
-      - name: Cache cargo + target
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install Trunk
+      # GitHub Pages serves 404.html for unknown paths, so deep links
+      # (/cooking-rs/planner) redirect too.
+      - name: Assemble the site
         run: |
-          wget -qO- https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz \
-            | sudo tar -xzf - -C /usr/local/bin
-
-      # The repo is served at https://<user>.github.io/cooking-rs/, so both the
-      # asset base (--public-url) and the router base (APP_BASE_PATH) must point
-      # at /cooking-rs. Change these together if you rename the repo or use a
-      # user/root or custom-domain page (then both become "/" and "" respectively).
-      - name: Build
-        env:
-          APP_BASE_PATH: /cooking-rs
-        run: trunk build --release --public-url /cooking-rs/
-
-      # SPA fallback: GitHub Pages serves 404.html for unknown paths, so a hard
-      # refresh of /cooking-rs/planner loads the app instead of a 404 (and a deep
-      # link into a PR preview goes back to that preview).
-      - name: Add SPA fallback
-        run: python3 .github/scripts/spa_fallback.py dist
+          mkdir dist
+          cp redirect/index.html dist/index.html
+          cp redirect/index.html dist/404.html
+          cp redirect/sw.js dist/sw.js
 
       - name: Publish to gh-pages
         uses: JamesIves/github-pages-deploy-action@v4

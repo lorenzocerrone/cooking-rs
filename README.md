@@ -1,9 +1,11 @@
 # cooking-rs
 
-> **Status: proof of concept, superseded.** This Rust/Leptos app proved the idea and is
-> being rewritten in TypeScript as **menu.lock** (repo `menu-lock`). The full brief for
-> the rewrite is in [`REWRITE_PLAN.md`](REWRITE_PLAN.md). This repo stays as the
-> reference implementation until menu.lock reaches parity, then its site redirects there.
+> **Archived.** This Rust/Leptos app was the proof of concept for
+> [**menu.lock**](https://github.com/lorenzocerrone/menu-lock), its TypeScript rewrite,
+> which has replaced it. The site at `/cooking-rs/` now only redirects: every old
+> address, with its plan, opens the same page of menu.lock (see [`redirect/`](redirect/)).
+> The code stays as the reference implementation; the brief for the rewrite is
+> [`REWRITE_PLAN.md`](REWRITE_PLAN.md).
 
 A small, statically-buildable web app for organizing recipes, planning the coming
 days' meals, and getting the grocery list for it. Written in Rust with
@@ -174,8 +176,10 @@ dictionary doesn't know and units the grocery list can't add up are warnings.
 
 ## Deploy (GitHub Pages)
 
-Pushing to `main` runs `.github/workflows/deploy.yml`, which builds with the
-correct base path and publishes `dist/` to the root of the `gh-pages` branch.
+Pushing to `main` runs `.github/workflows/deploy.yml`, which no longer builds the
+app: it publishes the redirect to menu.lock (`redirect/index.html`, also as
+`404.html`, and a `sw.js` that removes the old app's service worker) to the root of
+the `gh-pages` branch. What follows describes how the app itself was deployed.
 
 Every pull request gets a preview: `.github/workflows/preview.yml` builds it to
 `https://<user>.github.io/cooking-rs/pr-preview/pr-<number>/`, comments the link
