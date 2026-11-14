@@ -28,6 +28,9 @@ jobs:
       - name: Cache cargo + target
         uses: Swatinem/rust-cache@v2
 
+      - name: Redirect to menu.lock
+        run: node redirect/test.mjs
+
       # Cheapest checks first so the job fails fast.
       - name: Format
         run: cargo fmt --all --check

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <meta name="color-scheme" content="light dark" />
+    <title>cooking-rs is now menu.lock</title>
+    <script>
+      // cooking-rs moved to menu.lock. Every old address, with its plan, goes to
+      // the same place in the new app:
+      //   /cooking-rs/<page>?<filters>#plan=<p>  ->  /menu-lock/#/<page>?<filters>&plan=<p>
+      // This file is also published as 404.html, so deep links redirect too.
+      var NEW_APP = "/menu-lock/";
+
+      /** The new address for an old one, or null to stay (a pull-request preview). */
+      function target(pathname, search, hash) {
+        // Previews of this repo's pull requests are still the old app: leave them alone.
+        if (/^\/[^/]+\/pr-preview\//.test(pathname)) return null;
+
+        // The page: what follows the repo's own folder.
+        var page = pathname.replace(/^\/[^/]+/, "").replace(/^\/+|\/+$/g, "").replace(/(^|\/)index\.html$/, "");
+        var route = "/";
+        if (page === "planner" || page === "grocery") route = "/" + page;
+        else if (/^recipe\/[^/]+$/.test(page)) route = "/" + page;
+        // "new" (the recipe editor, not ported) and anything unknown go to the recipe list.
+
+        // The recipe list's search and filters keep their names in the new app.
+        var params = [];
+        if (route === "/") {
+          search.replace(/^\?/, "").split("&").forEach(function (pair) {
+            if (/^(q|diet|by|cuisine|tag|time)=./.test(pair)) params.push(pair);
+          });
+        }
+        // The plan moves from the fragment into the route's query.
+        var plan = /^#plan=([A-Za-z0-9_-]+)$/.exec(hash);
+        if (plan) params.push("plan=" + plan[1]);
+
+        return NEW_APP + "#" + route + (params.length ? "?" + params.join("&") : "");
+      }
+
+      var to = target(location.pathname, location.search, location.hash);
+      if (to) location.replace(to);
+    </script>
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        font: 16px/1.5 system-ui, sans-serif;
+        background: #efe8d8;
+        color: #3b3327;
+      }
+      a {
+        color: #9a5426;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #221d16;
+          color: #ede4d0;
+        }
+        a {
+          color: #d18653;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <p>cooking-rs is now <a href="/menu-lock/">menu.lock</a>.</p>
+  </body>
+</html>
