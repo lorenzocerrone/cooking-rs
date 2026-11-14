@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#A85E30" />
+    <title>cooking-rs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
+    />
+    
+<script type="module">
+import init, * as bindings from '/cooking-rs/cooking-rs-20725c96efa7c930.js';
+const wasm = await init({ module_or_path: '/cooking-rs/cooking-rs-20725c96efa7c930_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+    <link rel="stylesheet" href="/cooking-rs/style-6531de5ce35278a6.css" integrity="sha384-N8enQSIngORaA/ITZ4ivPxIbYZECKl8GrCWqFUaXiZa98r0tqG9pJc/Kg/PLtBBW"/>
+    <!-- PWA assets copied into dist/. The manifest <link> and service-worker
+         registration are injected at runtime from Rust (see src/pwa.rs) so they
+         stay base-path correct on deep links. -->
+    
+    
+    
+    
+  <link rel="modulepreload" href="/cooking-rs/cooking-rs-20725c96efa7c930.js" crossorigin="anonymous" integrity="sha384-Cd8L46ScQMNMqxo4kO8y/D+9Q4+Xvk3gS7/7qaRt2Sy4gbJzMRUs7GK/WyfJ75lJ"><link rel="preload" href="/cooking-rs/cooking-rs-20725c96efa7c930_bg.wasm" crossorigin="anonymous" integrity="sha384-wp63URlyiQuuFqqR0QTbnS8IfAP7MGT3IGyZJwoGD0oQ0rWTsNBeZyqOYn3qp8ef" as="fetch" type="application/wasm"></head>
+  <body></body>
+</html>
